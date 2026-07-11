@@ -1,0 +1,6 @@
+{
+  "name": "Doo Store",
+  "description": "متجر Doo لبيع خدمات ديسكورد نيترو، بوستات سيرفرات، وتأثيرات الملف الشخصي بأسعار منافسة ودفع تلقائي سريع.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

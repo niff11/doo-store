@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Cairo", "Inter", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Cairo", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-discord-purple: #4e56c2;
+  --color-discord-dark: #2b2d31;
+  --color-discord-darker: #1e1f22;
+  --color-discord-black: #111214;
+  --color-discord-green: #248046;
+  --color-discord-yellow: #ca911f;
+  --color-discord-fuchsia: #b8327d;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-discord-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f4248;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-discord-purple);
+}
+
+body {
+  background-color: var(--color-discord-black);
+  color: #f2f3f5;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  direction: rtl; /* Right-to-Left by default for professional Arabic */
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(30, 31, 34, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-premium {
+  background: linear-gradient(135deg, rgba(78, 86, 194, 0.05) 0%, rgba(30, 31, 34, 0.8) 100%);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(78, 86, 194, 0.15);
+}
+
+/* Glow effects */
+.glow-purple {
+  box-shadow: 0 0 15px -3px rgba(78, 86, 194, 0.2);
+}
+
+.glow-fuchsia {
+  box-shadow: 0 0 15px -3px rgba(184, 50, 125, 0.2);
+}
+
+/* Animation custom utilities */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 4s infinite ease-in-out;
+}
