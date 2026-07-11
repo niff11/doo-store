@@ -63,7 +63,7 @@ export default function App() {
     effects: 'تأثيرات الملف الشخصي',
     users_premium: 'يوزرات مميزة',
     creations_custom: 'إنشاءات',
-    old_accounts: 'حسابات قديمة ⏱️',
+    old_accounts: 'old accounts',
   });
   
   // Custom Toasts state
