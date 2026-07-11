@@ -259,35 +259,35 @@ export default function ReviewsSection() {
       </div>
 
       {/* Reviews Grid List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {reviews.slice(0, showAllReviews ? undefined : 3).map((rev) => (
           <motion.div
             key={rev.id}
             layout
-            className="p-6 rounded-2xl bg-discord-darker/60 border border-white/5 space-y-4 flex flex-col justify-between hover:border-discord-purple/20 transition-all relative overflow-hidden group"
+            className="p-4 rounded-xl bg-discord-darker/60 border border-white/5 space-y-3 flex flex-col justify-between hover:border-discord-purple/20 transition-all relative overflow-hidden group"
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            whileHover={{ y: -4 }}
+            whileHover={{ y: -3 }}
           >
             {/* Top Row: User info and Stars */}
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-discord-purple to-discord-fuchsia flex items-center justify-center font-bold text-white uppercase text-sm">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-discord-purple to-discord-fuchsia flex items-center justify-center font-bold text-white uppercase text-xs">
                     {rev.username.charAt(0)}
                   </div>
                   <div>
-                    <h4 className="font-extrabold text-white text-sm flex items-center gap-1.5">
+                    <h4 className="font-extrabold text-white text-xs flex items-center gap-1.5">
                       {rev.username}
                       {rev.verifiedPurchase && (
-                        <span className="text-[9px] bg-discord-green/10 text-discord-green border border-discord-green/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                          <CheckCircle2 className="w-2.5 h-2.5" />
+                        <span className="text-[8px] bg-discord-green/10 text-discord-green border border-discord-green/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                          <CheckCircle2 className="w-2 h-2" />
                           مشتري مؤكد
                         </span>
                       )}
                     </h4>
-                    <p className="text-[10px] text-gray-500">{rev.date}</p>
+                    <p className="text-[9px] text-gray-500">{rev.date}</p>
                   </div>
                 </div>
 
@@ -295,7 +295,7 @@ export default function ReviewsSection() {
                   {[...Array(5)].map((_, i) => (
                     <Star
                       key={i}
-                      className={`w-4 h-4 ${
+                      className={`w-3.5 h-3.5 ${
                         i < rev.rating ? 'text-discord-yellow fill-discord-yellow' : 'text-gray-700'
                       }`}
                     />
@@ -305,33 +305,33 @@ export default function ReviewsSection() {
 
               {/* Product tag */}
               {rev.productName && (
-                <div className="inline-block bg-discord-dark px-2.5 py-1 rounded-lg text-[10px] text-discord-purple font-semibold">
+                <div className="inline-block bg-discord-dark px-2 py-0.5 rounded-md text-[9px] text-discord-purple font-semibold">
                   🏷️ {rev.productName}
                 </div>
               )}
 
               {/* Comment text */}
-              <p className="text-gray-300 text-xs md:text-sm leading-relaxed pt-2">
+              <p className="text-gray-300 text-xs leading-relaxed pt-1">
                 {rev.comment}
               </p>
             </div>
 
             {/* Bottom Actions: Likes and Share */}
-            <div className="flex items-center justify-between pt-3 border-t border-white/5 text-xs text-gray-400">
+            <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[10px] text-gray-400">
               <button
                 onClick={() => handleLike(rev.id)}
-                className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer"
+                className="flex items-center gap-1 hover:text-white transition-colors cursor-pointer"
               >
-                <ThumbsUp className="w-4 h-4 text-discord-fuchsia" />
+                <ThumbsUp className="w-3.5 h-3.5 text-discord-fuchsia" />
                 <span>أعجبني ({rev.likes})</span>
               </button>
 
               <div className="relative">
                 <button
                   onClick={() => handleShare(rev.id, rev.comment)}
-                  className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer"
+                  className="flex items-center gap-1 hover:text-white transition-colors cursor-pointer"
                 >
-                  <Share2 className="w-4 h-4 text-discord-purple" />
+                  <Share2 className="w-3.5 h-3.5 text-discord-purple" />
                   <span>مشاركة</span>
                 </button>
 
@@ -350,7 +350,7 @@ export default function ReviewsSection() {
                         rel="noreferrer"
                         className="p-1.5 bg-black/40 hover:bg-black/80 rounded-lg text-white hover:text-[#1da1f2] transition-colors"
                       >
-                        <Twitter className="w-4 h-4" />
+                        <Twitter className="w-3.5 h-3.5" />
                       </a>
                       <a
                         href={getShareUrl('whatsapp', rev.comment)}
@@ -358,11 +358,11 @@ export default function ReviewsSection() {
                         rel="noreferrer"
                         className="p-1.5 bg-black/40 hover:bg-black/80 rounded-lg text-white hover:text-[#25d366] transition-colors"
                       >
-                        <MessageCircle className="w-4 h-4" />
+                        <MessageCircle className="w-3.5 h-3.5" />
                       </a>
                       <button
                         onClick={() => copyToClipboard(rev.comment)}
-                        className="p-1.5 bg-black/40 hover:bg-black/80 rounded-lg text-white hover:text-discord-purple transition-colors cursor-pointer text-[10px] font-bold px-2"
+                        className="p-1.5 bg-black/40 hover:bg-black/80 rounded-lg text-white hover:text-discord-purple transition-colors cursor-pointer text-[9px] font-bold px-2"
                       >
                         نسخ الرابط
                       </button>

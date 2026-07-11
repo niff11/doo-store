@@ -22,7 +22,8 @@ import {
   Heart,
   Globe,
   Bell,
-  X
+  X,
+  AlertCircle
 } from 'lucide-react';
 
 // Import local components
@@ -43,6 +44,7 @@ import { PRODUCTS } from './data';
 export default function App() {
   const [currentView, setCurrentView] = useState<string>('home');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [myOrdersQuery, setMyOrdersQuery] = useState<string>('');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
@@ -52,10 +54,16 @@ export default function App() {
   const [adminPasscode, setAdminPasscode] = useState<string>(() => {
     return localStorage.getItem('doo_admin_passcode') || 'Loveloly1234';
   });
+  const [adminEmail, setAdminEmail] = useState<string>(() => {
+    return localStorage.getItem('doo_admin_email') || 'ahmed.amk208@gmail.com';
+  });
   const [categoryNames, setCategoryNames] = useState({
     nitro: 'ديسكورد نيترو',
     boosts: 'بوستات السيرفر',
     effects: 'تأثيرات الملف الشخصي',
+    users_premium: 'يوزرات مميزة',
+    creations_custom: 'إنشاءات',
+    old_accounts: 'حسابات قديمة ⏱️',
   });
   
   // Custom Toasts state
@@ -76,12 +84,31 @@ export default function App() {
     }
     const savedProducts = localStorage.getItem('doo_store_products');
     if (savedProducts) {
-      setProducts(JSON.parse(savedProducts));
+      const parsed = JSON.parse(savedProducts);
+      const hasOldAccounts = parsed.some((p: any) => p.id === 'old_accounts_creation');
+      if (!hasOldAccounts) {
+        // Append old_accounts_creation to existing storage or reload
+        const freshProducts = [...parsed];
+        const targetProduct = PRODUCTS.find(p => p.id === 'old_accounts_creation');
+        if (targetProduct) {
+          freshProducts.push(targetProduct);
+          setProducts(freshProducts);
+          localStorage.setItem('doo_store_products', JSON.stringify(freshProducts));
+        } else {
+          setProducts(PRODUCTS);
+          localStorage.setItem('doo_store_products', JSON.stringify(PRODUCTS));
+        }
+      } else {
+        setProducts(parsed);
+      }
+    } else {
+      setProducts(PRODUCTS);
+      localStorage.setItem('doo_store_products', JSON.stringify(PRODUCTS));
     }
   }, []);
 
-  const handleUpdateCategoryNames = (names: { nitro: string; boosts: string; effects: string }) => {
-    setCategoryNames(names);
+  const handleUpdateCategoryNames = (names: { nitro: string; boosts: string; effects: string; users_premium?: string; creations_custom?: string; old_accounts?: string }) => {
+    setCategoryNames(names as any);
     localStorage.setItem('doo_store_category_names', JSON.stringify(names));
   };
 
@@ -136,14 +163,49 @@ export default function App() {
     const handleNewOrder = (e: Event) => {
       const customEvent = e as CustomEvent<Order>;
       if (customEvent.detail) {
+        const order = customEvent.detail;
+        
+        // 1. Show live notification on screen
         setLiveNotification({
-          name: customEvent.detail.customerName,
-          action: `أتم عملية دفع ناجحة لخدمات بقيمة ${customEvent.detail.total} ريال وتوصيل تلقائي! 🛍️`,
+          name: order.customerName,
+          action: `أتم عملية دفع ناجحة لخدمات بقيمة ${order.total} ريال وبانتظار موافقة الإدارة! ⏳🛍️`,
           time: 'الآن'
         });
         setTimeout(() => {
           setLiveNotification(null);
         }, 8000);
+
+        // 2. Generate Automated Email Alert to Manager
+        const savedEmails = localStorage.getItem('doo_sent_emails');
+        const currentEmails = savedEmails ? JSON.parse(savedEmails) : [];
+        const itemsText = order.items.map(item => `${item.product.nameAr} (الكمية: ${item.quantity})`).join('، ');
+        const currentAdminEmail = localStorage.getItem('doo_admin_email') || 'ahmed.amk208@gmail.com';
+        
+        const emailContent = `مرحباً مدير متجر Doo، هناك طلب جديد في المتجر قيد الانتظار بانتظار موافقتك وتفعيلك:
+• رقم الطلب: ${order.id}
+• اسم العميل: ${order.customerName}
+• البريد الإلكتروني: ${order.email}
+• حساب الديسكورد: ${order.discordUsername}
+• المنتجات المطلوبة: ${itemsText}
+• المبلغ الإجمالي: ${order.total} ريال سعودي
+• طريقة الدفع: ${order.paymentMethod === 'bank_transfer' ? 'تحويل بنكي (إيصال مرفق)' : order.paymentMethod}
+• حالة الدفع: قيد التحقق (يرجى مراجعة إيصال التحويل المرفق)
+
+تم إرسال هذا التنبيه التلقائي إلى بريدك الإلكتروني لتسريع الاستجابة وتفعيل الخدمة للعميل فوراً.`;
+
+        const newEmailLog = {
+          id: `EML-${Math.floor(100000 + Math.random() * 900000)}`,
+          recipient: currentAdminEmail,
+          subject: `🚨 طلب جديد بالانتظار رقم #${order.id} - متجر Doo`,
+          body: emailContent,
+          status: 'success',
+          date: new Date().toISOString().replace('T', ' ').substring(0, 19)
+        };
+
+        localStorage.setItem('doo_sent_emails', JSON.stringify([newEmailLog, ...currentEmails]));
+        
+        // Show a beautiful toast confirming email alert dispatch
+        addToast(`📧 تم إرسال تنبيه بريد آلي للمدير (${currentAdminEmail}) بنجاح لتسريع التفعيل!`);
       }
     };
     window.addEventListener('new_order_placed', handleNewOrder);
@@ -213,37 +275,50 @@ export default function App() {
   };
 
   // Admin adjustments
-  const handleUpdateProductPrice = (id: string, price: number) => {
+  const handleCreateProduct = (p: Product) => {
+    const updated = [...products, p];
+    setProducts(updated);
+    localStorage.setItem('doo_store_products', JSON.stringify(updated));
+  };
+
+  const handleDeleteProduct = (id: string) => {
+    const updated = products.filter((p) => p.id !== id);
+    setProducts(updated);
+    localStorage.setItem('doo_store_products', JSON.stringify(updated));
+  };
+
+  const handleUpdateProduct = (id: string, updatedFields: Partial<Product>) => {
     const updated = products.map((p) => {
       if (p.id === id) {
-        return { ...p, price };
+        return { ...p, ...updatedFields };
       }
       return p;
     });
     setProducts(updated);
     localStorage.setItem('doo_store_products', JSON.stringify(updated));
+  };
+
+  const handlePurchaseProduct = (id: string) => {
+    const updated = products.map((p) => {
+      if (p.id === id) {
+        return { ...p, stock: 0 };
+      }
+      return p;
+    });
+    setProducts(updated);
+    localStorage.setItem('doo_store_products', JSON.stringify(updated));
+  };
+
+  const handleUpdateProductPrice = (id: string, price: number) => {
+    handleUpdateProduct(id, { price });
   };
 
   const handleUpdateProductStock = (id: string, stock: number) => {
-    const updated = products.map((p) => {
-      if (p.id === id) {
-        return { ...p, stock };
-      }
-      return p;
-    });
-    setProducts(updated);
-    localStorage.setItem('doo_store_products', JSON.stringify(updated));
+    handleUpdateProduct(id, { stock });
   };
 
   const handleUpdateProductImage = (id: string, image: string) => {
-    const updated = products.map((p) => {
-      if (p.id === id) {
-        return { ...p, image };
-      }
-      return p;
-    });
-    setProducts(updated);
-    localStorage.setItem('doo_store_products', JSON.stringify(updated));
+    handleUpdateProduct(id, { image });
   };
 
   // Contact Form submit
@@ -266,8 +341,8 @@ export default function App() {
   // Filters depending on search queries
   const filteredProducts = products.filter((p) => {
     const matchesSearch =
-      p.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.descriptionAr.toLowerCase().includes(searchQuery.toLowerCase());
+      (p.nameAr || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
+      (p.descriptionAr || '').toLowerCase().includes((searchQuery || '').toLowerCase());
     return matchesSearch;
   });
 
@@ -318,6 +393,9 @@ export default function App() {
             onUpdateProductPrice={handleUpdateProductPrice}
             onUpdateProductStock={handleUpdateProductStock}
             onUpdateProductImage={handleUpdateProductImage}
+            onUpdateProduct={handleUpdateProduct}
+            onCreateProduct={handleCreateProduct}
+            onDeleteProduct={handleDeleteProduct}
             categoryNames={categoryNames}
             onUpdateCategoryNames={handleUpdateCategoryNames}
             addToast={addToast}
@@ -550,7 +628,7 @@ export default function App() {
                     <p className="text-xs sm:text-sm text-gray-400 max-w-md mx-auto">اختر القسم الذي تريده واستمتع بتسليم فوري مع كامل الضمان والأمان.</p>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {/* Category 1: Nitro */}
                     <motion.div
                       onClick={() => handleNavigate('nitro')}
@@ -627,6 +705,62 @@ export default function App() {
                         <div className="space-y-1">
                           <h3 className="text-xl font-black text-white group-hover:text-discord-purple transition-colors">{categoryNames.effects}</h3>
                           <p className="text-xs text-gray-400 leading-relaxed">زخارف حصرية وصانعة تميز لحسابك في ديسكورد حسب طلبك.</p>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                          <span className="text-[11px] text-discord-purple font-black">تصفح المنتجات ←</span>
+                          <span className="text-xs font-bold text-gray-500">حسب الطلب 💬</span>
+                        </div>
+                      </div>
+                    </motion.div>
+
+                    {/* Category 4: Premium Usernames */}
+                    <motion.div
+                      onClick={() => handleNavigate('users_premium')}
+                      className="group cursor-pointer rounded-3xl bg-discord-darker/60 border border-white/5 hover:border-discord-purple/40 overflow-hidden shadow-xl transition-all relative flex flex-col justify-between"
+                      whileHover={{ y: -8 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <div className="relative aspect-video overflow-hidden bg-discord-black">
+                        <div className="absolute inset-0 bg-gradient-to-t from-discord-black via-transparent to-transparent z-10"></div>
+                        <img
+                          src={products.find(p => p.category === 'users_premium')?.image || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'}
+                          alt={categoryNames.users_premium}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                      <div className="p-6 space-y-4 relative z-20 text-right">
+                        <div className="space-y-1">
+                          <h3 className="text-xl font-black text-white group-hover:text-discord-purple transition-colors">{categoryNames.users_premium}</h3>
+                          <p className="text-xs text-gray-400 leading-relaxed">يوزرات وحسابات ديسكورد ثلاثية ورباعية مميزة جداً وشبه خماسية.</p>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                          <span className="text-[11px] text-discord-purple font-black">تصفح المنتجات ←</span>
+                          <span className="text-xs font-bold text-gray-500">حسب الطلب 💬</span>
+                        </div>
+                      </div>
+                    </motion.div>
+
+                    {/* Category 5: Creations */}
+                    <motion.div
+                      onClick={() => handleNavigate('creations_custom')}
+                      className="group cursor-pointer rounded-3xl bg-discord-darker/60 border border-white/5 hover:border-discord-purple/40 overflow-hidden shadow-xl transition-all relative flex flex-col justify-between"
+                      whileHover={{ y: -8 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <div className="relative aspect-video overflow-hidden bg-discord-black">
+                        <div className="absolute inset-0 bg-gradient-to-t from-discord-black via-transparent to-transparent z-10"></div>
+                        <img
+                          src={products.find(p => p.category === 'creations_custom')?.image || 'https://images.unsplash.com/photo-1626544827763-d516dce335e2?auto=format&fit=crop&w=600&q=80'}
+                          alt={categoryNames.creations_custom}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                      <div className="p-6 space-y-4 relative z-20 text-right">
+                        <div className="space-y-1">
+                          <h3 className="text-xl font-black text-white group-hover:text-discord-purple transition-colors">{categoryNames.creations_custom}</h3>
+                          <p className="text-xs text-gray-400 leading-relaxed">برمجة بوتات مخصصة، تصميم سيرفرات احترافية متكاملة، والمزيد.</p>
                         </div>
                         <div className="flex items-center justify-between pt-2 border-t border-white/5">
                           <span className="text-[11px] text-discord-purple font-black">تصفح المنتجات ←</span>
@@ -775,6 +909,336 @@ export default function App() {
               </motion.div>
             )}
 
+            {/* VIEW 4.1: PREMIUM USERNAMES VIEW */}
+            {currentView === 'users_premium' && (
+              <motion.div
+                key="users-premium-view"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="py-12"
+              >
+                <div className="max-w-7xl mx-auto px-4 space-y-12 text-right">
+                  <div className="text-center space-y-2">
+                    <h1 className="text-3xl font-black text-white font-display">يوزرات وحسابات ديسكورد مميزة</h1>
+                    <p className="text-xs text-gray-400">تصفح واقتنِ أفخم اليوزرات النادرة والثنائية والرباعية المتوفرة حسب طلبك.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {products.filter(p => p.category === 'users_premium' && p.stock > 0).length === 0 ? (
+                      <div className="col-span-full text-center p-12 bg-discord-dark rounded-2xl border border-white/5 text-gray-400">
+                        <AlertCircle className="w-8 h-8 text-discord-purple mx-auto mb-2" />
+                        <p className="text-xs">لا يوجد يوزرات معروضة حالياً. يمكنك إضافتها من لوحة الإدارة.</p>
+                      </div>
+                    ) : (
+                      products.filter(p => p.category === 'users_premium' && p.stock > 0).map((uProd) => (
+                        <div
+                          key={uProd.id}
+                          className="p-6 rounded-3xl bg-discord-dark border border-white/5 hover:border-discord-purple/20 transition-all flex flex-col justify-between"
+                        >
+                          <div className="space-y-4">
+                            <div className="aspect-video rounded-xl overflow-hidden bg-discord-black border border-white/5">
+                              <img
+                                src={uProd.image || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'}
+                                alt={uProd.nameAr}
+                                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <span className="inline-block px-2 py-0.5 text-[9px] font-bold text-discord-purple bg-discord-purple/10 rounded">يوزر مميز 🔥</span>
+                              <h3 className="font-extrabold text-base text-white">{uProd.nameAr}</h3>
+                              <p className="text-xs text-gray-400 leading-relaxed line-clamp-2">{uProd.descriptionAr}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5">
+                            <span className="text-discord-fuchsia font-extrabold text-sm">
+                              {uProd.priceOnRequest ? 'السعر حسب الطلب 💬' : `${uProd.price} ريال`}
+                            </span>
+                            <button
+                              onClick={() => handleNavigate('product_details', uProd)}
+                              className="px-4 py-2 bg-discord-purple hover:bg-[#4752c4] text-white text-[11px] font-bold rounded-xl cursor-pointer transition-all"
+                            >
+                              تفاصيل وحجز اليوزر
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* VIEW 4.2: CUSTOM CREATIONS VIEW */}
+            {currentView === 'creations_custom' && (
+              <motion.div
+                key="creations-custom-view"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="py-12"
+              >
+                <div className="max-w-7xl mx-auto px-4 space-y-12 text-right">
+                  <div className="text-center space-y-2">
+                    <h1 className="text-3xl font-black text-white font-display">إنشاءات وتصميم ديسكورد احترافي</h1>
+                    <p className="text-xs text-gray-400">برمجة بوتات مخصصة متكاملة، تصميم سيرفرات من الصفر، وتصميم لوجوهات وبنرات بجودة أسطورية.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {products.filter(p => p.category === 'creations_custom').map((cProd) => (
+                      <div
+                        key={cProd.id}
+                        className="p-6 rounded-3xl bg-discord-dark border border-white/5 hover:border-discord-purple/20 transition-all flex flex-col justify-between"
+                      >
+                        <div className="space-y-4">
+                          <div className="aspect-video rounded-xl overflow-hidden bg-discord-black border border-white/5">
+                            <img
+                              src={cProd.image || 'https://images.unsplash.com/photo-1626544827763-d516dce335e2?auto=format&fit=crop&w=600&q=80'}
+                              alt={cProd.nameAr}
+                              className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold text-discord-fuchsia bg-discord-fuchsia/10 rounded">إنشاء احترافي 🛠️</span>
+                            <h3 className="font-extrabold text-base text-white">{cProd.nameAr}</h3>
+                            <p className="text-xs text-gray-400 leading-relaxed line-clamp-2">{cProd.descriptionAr}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5">
+                          <span className="text-discord-fuchsia font-extrabold text-sm">
+                            {cProd.priceOnRequest ? 'السعر حسب الطلب 💬' : `${cProd.price} ريال`}
+                          </span>
+                          <button
+                            onClick={() => handleNavigate('product_details', cProd)}
+                            className="px-4 py-2 bg-discord-purple hover:bg-[#4752c4] text-white text-[11px] font-bold rounded-xl cursor-pointer transition-all"
+                          >
+                            طلب الخدمة ومناقشتها
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* VIEW 4.3: OLD ACCOUNTS CREATIONS VIEW */}
+            {currentView === 'old_accounts' && (
+              <motion.div
+                key="old-accounts-view"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="py-12"
+              >
+                <div className="max-w-7xl mx-auto px-4 space-y-12 text-right">
+                  <div className="text-center space-y-2">
+                    <h1 className="text-3xl font-black text-white font-display">إنشاءات حسابات ديسكورد قديمة</h1>
+                    <p className="text-xs text-gray-400">احصل على حساب ديسكورد نادر وتاريخ إنشاء قديم يمنحك ثقة كاملة ومصداقية فورية في المنصة.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                    {products.filter(p => p.category === 'old_accounts').map((cProd) => (
+                      <div
+                        key={cProd.id}
+                        className="p-6 rounded-3xl bg-discord-dark border border-white/5 hover:border-discord-purple/20 transition-all flex flex-col justify-between"
+                      >
+                        <div className="space-y-4">
+                          <div className="aspect-video rounded-xl overflow-hidden bg-discord-black border border-white/5 relative">
+                            <img
+                              src={cProd.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80'}
+                              alt={cProd.nameAr}
+                              className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute top-2 right-2 bg-discord-purple text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow">شعبية فائقة 🔥</div>
+                          </div>
+                          <div className="space-y-2">
+                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold text-discord-fuchsia bg-discord-fuchsia/10 rounded">حسابات قديمة ⏱️</span>
+                            <h3 className="font-extrabold text-base text-white">{cProd.nameAr}</h3>
+                            <p className="text-xs text-gray-400 leading-relaxed line-clamp-3">{cProd.descriptionAr}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5">
+                          <div className="flex flex-col">
+                            <span className="text-gray-500 text-[10px] line-through font-sans">10 ريال</span>
+                            <span className="text-discord-green font-black text-sm">
+                              يبدأ من 4 ريال ⚡
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleNavigate('product_details', cProd)}
+                            className="px-4 py-2 bg-discord-purple hover:bg-[#4752c4] text-white text-[11px] font-bold rounded-xl cursor-pointer transition-all"
+                          >
+                            عرض الخيارات والتعديل
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* VIEW 4.4: MY ORDERS STATUS LOOKUP */}
+            {currentView === 'my_orders' && (
+              <motion.div
+                key="my-orders-view"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="py-12 max-w-2xl mx-auto px-4 space-y-12 text-right font-sans"
+              >
+                <div className="text-center space-y-2">
+                  <div className="inline-flex w-12 h-12 rounded-full bg-discord-purple/10 border border-discord-purple/20 items-center justify-center text-discord-purple mb-2">
+                    <ShoppingCart className="w-6 h-6 animate-bounce text-discord-purple" />
+                  </div>
+                  <h1 className="text-3xl font-black text-white font-display">تتبع حالة طلباتك 📦</h1>
+                  <p className="text-xs text-gray-400">تحقق فوراً من حالة طلبك (سواء كان قيد المراجعة، قيد التنفيذ، أو تم توصيله وتفعيله).</p>
+                </div>
+
+                {/* Search Bar lookup */}
+                <div className="p-6 rounded-3xl bg-discord-dark border border-white/5 space-y-4 shadow-xl">
+                  <h3 className="font-bold text-sm text-white">ابحث عن طلباتك بالمتجر:</h3>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="text"
+                      placeholder="أدخل بريدك الإلكتروني، حساب ديسكورد، أو رقم الطلب (DOO-...)"
+                      value={myOrdersQuery}
+                      onChange={(e) => setMyOrdersQuery(e.target.value)}
+                      className="flex-grow bg-discord-black border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-gray-500 outline-none focus:border-discord-purple text-right font-medium"
+                    />
+                  </div>
+                  <p className="text-[10px] text-gray-500">تلميح: سيتم فلترة وعرض كافة طلباتك تلقائياً وبشكل فوري بمجرد كتابة بريدك أو يوزرك.</p>
+                </div>
+
+                {/* Search Results Display */}
+                <div className="space-y-4">
+                  {(() => {
+                    const savedOrdersStr = localStorage.getItem('doo_store_orders');
+                    if (!savedOrdersStr) {
+                      return (
+                        <div className="text-center py-10 bg-discord-dark/20 border border-white/5 rounded-2xl">
+                          <p className="text-xs text-gray-400">لا يوجد أي طلبات مسجلة في المتجر حالياً.</p>
+                        </div>
+                      );
+                    }
+
+                    const allOrders = JSON.parse(savedOrdersStr) as Order[];
+                    const query = myOrdersQuery.trim().toLowerCase();
+
+                    // If query is empty, try to pre-populate with current logged-in user details if any
+                    let filtered = allOrders;
+                    let showInfoMsg = false;
+
+                    if (query) {
+                      filtered = allOrders.filter(o => 
+                        o.id.toLowerCase().includes(query) ||
+                        (o.email || '').toLowerCase().includes(query) ||
+                        (o.discordUsername || '').toLowerCase().includes(query) ||
+                        (o.customerName || '').toLowerCase().includes(query)
+                      );
+                    } else {
+                      // Try to autoload from current logged-in user
+                      const savedUserStr = localStorage.getItem('doo_current_user');
+                      if (savedUserStr) {
+                        const user = JSON.parse(savedUserStr);
+                        const userEmail = (user.email || '').toLowerCase();
+                        const userDiscord = (user.discordId || '').toLowerCase();
+                        const userName = (user.username || '').toLowerCase();
+                        filtered = allOrders.filter(o => 
+                          (o.email && o.email.toLowerCase() === userEmail) ||
+                          (o.discordUsername && o.discordUsername.toLowerCase() === userDiscord) ||
+                          (o.customerName && o.customerName.toLowerCase() === userName)
+                        );
+                        showInfoMsg = true;
+                      } else {
+                        filtered = [];
+                      }
+                    }
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="text-center py-12 bg-discord-dark/20 border border-white/5 rounded-2xl space-y-3">
+                          <ShoppingCart className="w-10 h-10 text-gray-600 mx-auto animate-pulse" />
+                          <h4 className="font-bold text-gray-400 text-sm">لم نجد أي طلبات مطابقة!</h4>
+                          <p className="text-[11px] text-gray-500 max-w-xs mx-auto leading-relaxed">
+                            {query ? 'تأكد من إدخال بريدك الإلكتروني أو حساب ديسكورد بشكل صحيح كما كتبته في نموذج الدفع.' : 'اكتب بريدك أو حساب ديسكورد بالبحث في الأعلى للاستعلام الفوري.'}
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-4">
+                        {showInfoMsg && (
+                          <div className="p-3 bg-discord-purple/10 border border-discord-purple/20 text-discord-purple rounded-xl text-xs font-semibold text-center">
+                            👤 تم تحميل الطلبات المرتبطة بحسابك الحالي تلقائياً.
+                          </div>
+                        )}
+                        <h3 className="font-extrabold text-sm text-white">الطلبات التي تم العثور عليها ({filtered.length}):</h3>
+                        <div className="space-y-4">
+                          {filtered.map((order) => (
+                            <div 
+                              key={order.id} 
+                              className="bg-discord-dark border border-white/5 hover:border-white/10 p-5 rounded-2xl text-right space-y-4 transition-all"
+                            >
+                              <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-3">
+                                <div className="space-y-1">
+                                  <span className="text-xs font-black text-white font-mono">{order.id}</span>
+                                  <span className="text-[10px] text-gray-500 block">{order.date}</span>
+                                </div>
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
+                                  order.status === 'completed' 
+                                    ? 'bg-discord-green/10 text-discord-green border border-discord-green/20' 
+                                    : order.status === 'pending'
+                                      ? 'bg-discord-yellow/10 text-discord-yellow border border-discord-yellow/20'
+                                      : order.status === 'processing'
+                                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                        : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                }`}>
+                                  {order.status === 'completed' && 'تم التفعيل والتسليم بنجاح ✅'}
+                                  {order.status === 'pending' && 'قيد الانتظار للتحقق والمراجعة ⏳'}
+                                  {order.status === 'processing' && 'جاري العمل والتنفيذ حالياً ⚙️'}
+                                  {order.status === 'failed' && 'مرفوض أو ملغي ❌'}
+                                </span>
+                              </div>
+
+                              {/* Items in order */}
+                              <div className="space-y-2 text-xs text-gray-300">
+                                {order.items.map((item, idx) => (
+                                  <div key={idx} className="flex justify-between items-center bg-[#1e1f22] p-3 rounded-xl border border-white/5">
+                                    <div className="space-y-1">
+                                      <p className="font-bold text-white">{item.product.nameAr}</p>
+                                      {item.selectedOption && (
+                                        <p className="text-[10px] text-discord-purple font-medium font-sans">{item.selectedOption}</p>
+                                      )}
+                                    </div>
+                                    <span className="font-bold text-discord-purple bg-discord-purple/10 px-2.5 py-0.5 rounded-full text-[10px] font-sans">الكمية: {item.quantity}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center justify-between text-xs pt-2">
+                                <span className="text-gray-400">طريقة الدفع: <span className="font-bold text-white font-sans">{
+                                  order.paymentMethod === 'apple_pay' ? 'Apple Pay' :
+                                  order.paymentMethod === 'stc_pay' ? 'STC Pay' :
+                                  order.paymentMethod === 'credit_card' ? 'بطاقة مدى/ائتمان' : 'تحويل بنكي'
+                                }</span></span>
+                                <span className="text-discord-green font-black text-sm font-sans">{order.total} ريال سعودي</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </motion.div>
+            )}
+
             {/* VIEW 5: FAQ PAGE */}
             {currentView === 'faq' && <FAQSection />}
 
@@ -864,6 +1328,7 @@ export default function App() {
                 onClearCart={handleClearCart}
                 onNavigate={(v, p) => handleNavigate(v, p)}
                 addToast={addToast}
+                onPurchaseProduct={handlePurchaseProduct}
               />
             )}
 

@@ -11,9 +11,10 @@ interface CartProps {
   onClearCart: () => void;
   onNavigate: (view: string, selectedProd?: Product) => void;
   addToast: (message: string) => void;
+  onPurchaseProduct?: (productId: string) => void;
 }
 
-export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClearCart, onNavigate, addToast }: CartProps) {
+export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClearCart, onNavigate, addToast, onPurchaseProduct }: CartProps) {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'cart' | 'checkout' | 'processing' | 'success'>('cart');
   
@@ -21,7 +22,7 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
   const [customerName, setCustomerName] = useState('');
   const [email, setEmail] = useState('');
   const [discordUsername, setDiscordUsername] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'stc_pay' | 'apple_pay' | 'bank_transfer'>('credit_card');
+  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'bank_transfer'>('bank_transfer');
   
   // Details depending on Payment
   const [cardNumber, setCardNumber] = useState('');
@@ -34,6 +35,7 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
   // Success States
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
+  const [showWarningModal, setShowWarningModal] = useState(false);
 
   const subtotal = cartItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
   const tax = Math.round(subtotal * 0.05); // 5% simulated processing/support fee
@@ -54,18 +56,13 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
     }
   };
 
-  const handleProcessOrder = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customerName || !email || !discordUsername) {
-      addToast('الرجاء إدخال كامل البيانات للتسليم التلقائي! ⚠️');
-      return;
-    }
-
+  const executeOrderFinalization = () => {
+    setShowWarningModal(false);
     setPaymentStep('processing');
 
     // Simulate 3 seconds secure processing
     setTimeout(() => {
-      // Create Order
+      // Create Order as Pending for Admin Approval
       const newOrder: Order = {
         id: `DOO-${Math.floor(100000 + Math.random() * 900000)}`,
         customerName,
@@ -75,12 +72,10 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
         total,
         paymentMethod,
         paymentDetails: {
-          cardNumber: paymentMethod === 'credit_card' ? `**** **** **** ${cardNumber.slice(-4)}` : undefined,
-          stcNumber: paymentMethod === 'stc_pay' ? stcNumber : undefined,
           receiptUrl: receiptName || undefined,
           referenceNumber: referenceNumber || undefined,
         },
-        status: 'completed',
+        status: 'pending', // Set to pending to require manual approval
         date: new Date().toISOString().split('T')[0],
         trackingCode: `TRK-${Math.floor(10000000 + Math.random() * 90000000)}`
       };
@@ -101,15 +96,42 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
         }
       });
 
+      // Trigger removal for purchased premium usernames
+      cartItems.forEach((item) => {
+        if (item.product.category === 'users_premium' && onPurchaseProduct) {
+          onPurchaseProduct(item.product.id);
+        }
+      });
+
       setGeneratedCodes(codes);
       setCreatedOrder(newOrder);
       setPaymentStep('success');
       onClearCart(); // empty cart
-      addToast('🎉 تم الدفع وتسليم خدماتك تلقائياً وبنجاح!');
+      addToast('⏳ تم إرسال طلبك بنجاح وهو الآن بانتظار موافقة الإدارة وتفعيل الخدمة!');
       
       // Emit trigger for order state notification
       window.dispatchEvent(new CustomEvent('new_order_placed', { detail: newOrder }));
     }, 3000);
+  };
+
+  const handleProcessOrder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerName.trim() || !email.trim() || !discordUsername.trim()) {
+      addToast('الرجاء إدخال كامل البيانات للتسليم! ⚠️');
+      return;
+    }
+
+    if (paymentMethod === 'bank_transfer' && !receiptName) {
+      addToast('⚠️ يجب تصوير الايصال و وضعه هنا لإتمام الطلب!');
+      return;
+    }
+
+    // Always show receipt warning before completing payment
+    if (paymentMethod === 'bank_transfer') {
+      setShowWarningModal(true);
+    } else {
+      executeOrderFinalization();
+    }
   };
 
   const copyCode = (code: string) => {
@@ -395,44 +417,15 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
                 <div className="space-y-4 pt-4 border-t border-white/5">
                   <h3 className="font-bold text-discord-purple text-xs sm:text-sm border-r-4 border-discord-purple pr-2">2. اختر طريقة الدفع المفضل لديك</h3>
                   
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setPaymentMethod('credit_card')}
-                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                        paymentMethod === 'credit_card'
-                          ? 'bg-discord-purple/20 border-discord-purple text-white glow-purple'
-                          : 'bg-discord-dark/40 border-white/5 text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      <CreditCard className="w-5 h-5" />
-                      <span className="text-[11px] font-bold">بطاقة بنكية (مدى)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('apple_pay')}
-                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                        paymentMethod === 'apple_pay'
-                          ? 'bg-discord-purple/20 border-discord-purple text-white glow-purple'
-                          : 'bg-discord-dark/40 border-white/5 text-gray-400 hover:text-white'
-                      }`}
+                      disabled
+                      className="p-3 rounded-xl border border-white/5 bg-discord-dark/10 text-gray-500 cursor-not-allowed flex flex-col items-center justify-center gap-1.5 opacity-50 relative overflow-hidden"
                     >
                       <Phone className="w-5 h-5" />
                       <span className="text-[11px] font-bold">Apple Pay</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('stc_pay')}
-                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                        paymentMethod === 'stc_pay'
-                          ? 'bg-discord-purple/20 border-discord-purple text-white glow-purple'
-                          : 'bg-discord-dark/40 border-white/5 text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      <Phone className="w-5 h-5 text-discord-green" />
-                      <span className="text-[11px] font-bold">STC Pay</span>
+                      <span className="absolute top-1 right-1 bg-discord-purple text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider scale-90">soon!</span>
                     </button>
 
                     <button
@@ -444,90 +437,14 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
                           : 'bg-discord-dark/40 border-white/5 text-gray-400 hover:text-white'
                       }`}
                     >
-                      <Landmark className="w-5 h-5" />
-                      <span className="text-[11px] font-bold">تحويل بنكي</span>
+                      <Landmark className="w-5 h-5 text-discord-fuchsia" />
+                      <span className="text-[11px] font-bold">تحويل بنكي 🏦</span>
                     </button>
                   </div>
 
                   {/* Payment Forms depending on selections */}
                   <div className="p-4 rounded-2xl bg-black/30 border border-white/5 mt-3">
                     
-                    {/* CREDIT CARD */}
-                    {paymentMethod === 'credit_card' && (
-                      <div className="space-y-3">
-                        <div className="space-y-1">
-                          <label className="text-gray-300 text-xs">رقم البطاقة (البطاقات البنكية):</label>
-                          <input
-                            type="text"
-                            required
-                            maxLength={19}
-                            value={cardNumber}
-                            onChange={(e) => setCardNumber(e.target.value.replace(/\s?/g, '').replace(/(\d{4})/g, '$1 ').trim())}
-                            placeholder="4000 1234 5678 9010"
-                            className="w-full bg-discord-dark border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-discord-purple text-left tracking-widest text-xs"
-                            dir="ltr"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-gray-300 text-xs">تاريخ الانتهاء:</label>
-                            <input
-                              type="text"
-                              required
-                              maxLength={5}
-                              value={cardExpiry}
-                              onChange={(e) => setCardExpiry(e.target.value)}
-                              placeholder="MM/YY"
-                              className="w-full bg-discord-dark border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-discord-purple text-center text-xs"
-                              dir="ltr"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-gray-300 text-xs">الرمز السري (CVV):</label>
-                            <input
-                              type="password"
-                              required
-                              maxLength={3}
-                              value={cardCvv}
-                              onChange={(e) => setCardCvv(e.target.value)}
-                              placeholder="***"
-                              className="w-full bg-discord-dark border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-discord-purple text-center text-xs"
-                              dir="ltr"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* APPLE PAY */}
-                    {paymentMethod === 'apple_pay' && (
-                      <div className="text-center py-4 space-y-3">
-                        <p className="text-xs text-gray-300 font-medium">سيتم خصم المبلغ تلقائياً وبأمان عبر محفظة Apple Pay الخاصة بجهازك.</p>
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-black font-extrabold text-xs cursor-pointer hover:bg-gray-100 transition-all shadow">
-                          <span> Pay - إتمام الدفع الفوري</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* STC PAY */}
-                    {paymentMethod === 'stc_pay' && (
-                      <div className="space-y-3">
-                        <div className="space-y-1">
-                          <label className="text-gray-300 text-xs">رقم جوال حساب STC Pay المسجل:</label>
-                          <input
-                            type="text"
-                            required
-                            value={stcNumber}
-                            onChange={(e) => setStcNumber(e.target.value)}
-                            placeholder="05xxxxxxxx"
-                            className="w-full bg-discord-dark border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-discord-purple text-left text-xs"
-                            dir="ltr"
-                          />
-                        </div>
-                        <p className="text-[10px] text-gray-400">ستتلقى رسالة تأكيد فورية للموافقة على الخصم من التطبيق.</p>
-                      </div>
-                    )}
-
                     {/* BANK TRANSFER */}
                     {paymentMethod === 'bank_transfer' && (
                       <div className="space-y-4 text-xs">
@@ -665,28 +582,38 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
               <div className="absolute top-0 right-0 w-32 h-32 bg-discord-green/5 rounded-full filter blur-3xl"></div>
 
               <div className="text-center space-y-3">
-                <div className="w-16 h-16 rounded-full bg-discord-green/10 text-discord-green flex items-center justify-center mx-auto border border-discord-green/30">
-                  <CheckCircle2 className="w-10 h-10 animate-bounce" />
+                <div className="w-16 h-16 rounded-full bg-discord-yellow/10 text-discord-yellow flex items-center justify-center mx-auto border border-discord-yellow/30">
+                  <Loader2 className="w-10 h-10 animate-spin text-discord-yellow" />
                 </div>
-                <h2 className="text-xl sm:text-2xl font-extrabold text-white">تهانينا! تم تفعيل طلبك وتوصيله بنجاح 🎉</h2>
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white">تم تقديم طلبك بنجاح وبانتظار تفعيل الإدارة ⏳</h2>
                 <p className="text-xs text-gray-400">رقم طلبك القانوني بالمتجر: <span className="text-white font-mono font-bold">{createdOrder.id}</span></p>
               </div>
 
-              {/* AUTOMATED CODES GENERATED */}
+              {/* AUTOMATED CODES GENERATED (PENDING WARNING) */}
               <div className="p-5 bg-black/40 border border-white/5 rounded-2xl space-y-3.5">
-                <p className="text-xs font-extrabold text-discord-purple flex items-center gap-1">
-                  <Sparkles className="w-4 h-4 text-discord-fuchsia" />
-                  أكواد التفعيل وروابط التوصيل التلقائي لخدماتك:
+                <p className="text-xs font-extrabold text-discord-yellow flex items-center gap-1">
+                  <Sparkles className="w-4 h-4 text-discord-yellow" />
+                  حالة أكواد التفعيل والتوصيل للطلب:
                 </p>
 
+                <div className="p-4 bg-discord-yellow/5 border border-discord-yellow/20 rounded-xl space-y-2 text-xs text-gray-300 leading-relaxed text-right">
+                  <p className="font-bold text-discord-yellow">⏳ الطلب قيد المراجعة الفورية من قبل مسؤولي الإدارة:</p>
+                  <p>
+                    مرحباً <span className="text-white font-bold">{createdOrder.customerName}</span>، لقد استلمنا إيصال التحويل البنكي المرفق وجاري التحقق من التحصيل لتفعيل خدماتك مباشرة.
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    بمجرد موافقة أحد المشرفين في لوحة الإدارة، سيتم تفعيل الطلب فورياً وستتحول الأكواد أدناه إلى روابط تفعيل حية وقابلة للنسخ تلقائياً.
+                  </p>
+                </div>
+
                 {generatedCodes.map((code, idx) => (
-                  <div key={idx} className="flex items-center justify-between gap-3 bg-discord-dark p-3.5 rounded-xl border border-white/10">
-                    <span className="text-xs font-mono text-gray-300 break-all select-all font-semibold" dir="ltr">
-                      {code}
+                  <div key={idx} className="flex items-center justify-between gap-3 bg-discord-dark/50 p-3.5 rounded-xl border border-white/5 opacity-60">
+                    <span className="text-xs font-mono text-gray-500 break-all select-all font-semibold" dir="ltr">
+                      ************************ (قيد موافقة الإدارة 🔒)
                     </span>
                     <button
-                      onClick={() => copyCode(code)}
-                      className="p-2 bg-discord-purple/20 hover:bg-discord-purple text-discord-purple hover:text-white rounded-lg transition-all cursor-pointer shrink-0"
+                      disabled
+                      className="p-2 bg-gray-500/10 text-gray-500 rounded-lg cursor-not-allowed shrink-0"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
@@ -694,7 +621,7 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
                 ))}
 
                 <p className="text-[10px] text-gray-400 leading-relaxed">
-                  💡 تذكير: الأكواد صالحة للتفعيل لمرة واحدة على حسابك في ديسكورد. تم إرسال نسخة احتياطية من الأكواد وفاتورة الشراء تلقائياً إلى بريدك الإلكتروني: <span className="text-white font-medium">{createdOrder.email}</span>.
+                  💡 تذكير: الأكواد صالحة للتفعيل لمرة واحدة على حسابك في ديسكورد فور تفعيلها من قبل الإدارة. تم إرسال نسخة احتياطية وفاتورة الشراء تلقائياً إلى بريدك الإلكتروني: <span className="text-white font-medium">{createdOrder.email}</span>.
                 </p>
               </div>
 
@@ -731,6 +658,60 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
               </div>
 
             </div>
+          </motion.div>
+        )}
+
+        {/* WARNING MODAL BEFORE BANK TRANSFER */}
+        {showWarningModal && (
+          <motion.div
+            key="warning-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              className="w-full max-w-md p-6 bg-[#1e1f22] border border-discord-yellow/30 rounded-3xl space-y-6 text-right shadow-2xl relative"
+              dir="rtl"
+            >
+              <div className="flex items-center gap-3 text-discord-yellow pb-2 border-b border-white/5">
+                <AlertCircle className="w-8 h-8 shrink-0 animate-bounce" />
+                <h3 className="text-lg font-black">تحذير هام قبل إتمام الدفع ⚠️</h3>
+              </div>
+
+              <div className="space-y-4 text-xs text-gray-300 leading-relaxed">
+                <p className="font-extrabold text-white text-sm bg-discord-yellow/10 p-3 rounded-xl border border-discord-yellow/20 text-center">
+                  ⚠️ يجب تصوير الايصال و وضعه هنا ⚠️
+                </p>
+                <p>
+                  الرجاء التأكد بنسبة 100% أنك قمت بتصوير شاشة التحويل الناجحة وإرفاق صورة الإيصال بشكل صحيح في الحقل المخصص قبل تأكيد الطلب.
+                </p>
+                <div className="p-3.5 bg-discord-purple/10 border border-discord-purple/20 rounded-xl text-gray-200">
+                  <span className="font-bold text-discord-fuchsia block mb-1">💡 لماذا هذا الإجراء؟</span>
+                  طلبك لن يتم تفعيله وتمريره للمراجعة حتى تتأكد الإدارة يدويًا من مطابقة الإيصال بالتحويل الوارد بمصرف الراجحي لمتجرنا.
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={executeOrderFinalization}
+                  className="flex-1 py-3 bg-discord-purple hover:bg-[#4752c4] text-white text-xs font-bold rounded-xl cursor-pointer transition-all text-center font-display shadow-md glow-purple font-black"
+                >
+                  أؤكد الإرفاق وإرسال الطلب 👍
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowWarningModal(false)}
+                  className="px-4 py-3 bg-discord-dark hover:bg-discord-dark/80 text-gray-400 hover:text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
+                >
+                  تراجع للتعديل
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
 

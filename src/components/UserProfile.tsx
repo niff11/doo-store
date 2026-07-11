@@ -92,10 +92,19 @@ export default function UserProfile({ addToast, onNavigate }: UserProfileProps) 
     if (savedOrders) {
       const allOrders = JSON.parse(savedOrders) as Order[];
       const filtered = allOrders.filter(
-        (o) => 
-          o.email.toLowerCase() === email.toLowerCase() || 
-          o.discordUsername.toLowerCase() === discordId.toLowerCase() ||
-          o.customerName.toLowerCase() === username.toLowerCase()
+        (o) => {
+          const orderEmail = (o.email || '').toLowerCase();
+          const targetEmail = (email || '').toLowerCase();
+          const orderDiscord = (o.discordUsername || '').toLowerCase();
+          const targetDiscord = (discordId || '').toLowerCase();
+          const orderName = (o.customerName || '').toLowerCase();
+          const targetName = (username || '').toLowerCase();
+          return (
+            (orderEmail && orderEmail === targetEmail) ||
+            (orderDiscord && orderDiscord === targetDiscord) ||
+            (orderName && orderName === targetName)
+          );
+        }
       );
       setUserOrders(filtered);
     }
@@ -104,7 +113,7 @@ export default function UserProfile({ addToast, onNavigate }: UserProfileProps) 
     const savedCreations = localStorage.getItem('doo_user_creations');
     if (savedCreations) {
       const allCreations = JSON.parse(savedCreations) as CreationRequest[];
-      const filtered = allCreations.filter((c) => c.username === username);
+      const filtered = allCreations.filter((c) => (c.username || '').toLowerCase() === (username || '').toLowerCase());
       setUserCreations(filtered);
     }
   };
@@ -121,9 +130,12 @@ export default function UserProfile({ addToast, onNavigate }: UserProfileProps) 
     const users = savedUsersStr ? JSON.parse(savedUsersStr) : [];
     
     const matchedUser = users.find(
-      (u: any) => 
-        (u.email.toLowerCase() === loginEmail.toLowerCase() || u.username.toLowerCase() === loginEmail.toLowerCase()) && 
-        u.password === loginPassword
+      (u: any) => {
+        const uEmail = (u.email || '').toLowerCase();
+        const uUsername = (u.username || '').toLowerCase();
+        const loginVal = (loginEmail || '').toLowerCase();
+        return (uEmail === loginVal || uUsername === loginVal) && u.password === loginPassword;
+      }
     );
 
     if (matchedUser) {
@@ -164,7 +176,9 @@ export default function UserProfile({ addToast, onNavigate }: UserProfileProps) 
     const users = savedUsersStr ? JSON.parse(savedUsersStr) : [];
 
     const isExist = users.some(
-      (u: any) => u.email.toLowerCase() === regEmail.toLowerCase() || u.username.toLowerCase() === regUsername.toLowerCase()
+      (u: any) => 
+        (u.email || '').toLowerCase() === (regEmail || '').toLowerCase() || 
+        (u.username || '').toLowerCase() === (regUsername || '').toLowerCase()
     );
 
     if (isExist) {

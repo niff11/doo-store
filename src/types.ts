@@ -6,7 +6,7 @@ export interface Product {
   descriptionAr: string;
   price: number;
   originalPrice?: number;
-  category: 'nitro' | 'boosts' | 'effects';
+  category: 'nitro' | 'boosts' | 'effects' | 'users_premium' | 'creations_custom' | 'old_accounts';
   image: string;
   benefits: string[];
   benefitsAr: string[];

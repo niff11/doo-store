@@ -11,7 +11,7 @@ interface HeaderProps {
   currentView: string;
   toggleAdmin: () => void;
   isAdminMode: boolean;
-  categoryNames?: { nitro: string; boosts: string; effects: string };
+  categoryNames?: { nitro: string; boosts: string; effects: string; users_premium?: string; creations_custom?: string; old_accounts?: string };
 }
 
 export default function Header({
@@ -33,7 +33,10 @@ export default function Header({
     { label: categoryNames?.nitro || 'ديسكورد نيترو', view: 'nitro' },
     { label: categoryNames?.boosts || 'بوستات السيرفر', view: 'boosts' },
     { label: categoryNames?.effects || 'تأثيرات الملف', view: 'effects' },
-    { label: 'حسابي والإنشاءات 👤', view: 'profile' },
+    { label: categoryNames?.users_premium || 'يوزرات مميزة', view: 'users_premium' },
+    { label: categoryNames?.creations_custom || 'إنشاءات', view: 'creations_custom' },
+    { label: categoryNames?.old_accounts || 'حسابات قديمة ⏱️', view: 'old_accounts' },
+    { label: 'طلباتي 📦', view: 'my_orders' },
     { label: 'الأسئلة الشائعة', view: 'faq' },
     { label: 'شروط الخدمة', view: 'terms' },
     { label: 'تواصل معنا', view: 'contact' },

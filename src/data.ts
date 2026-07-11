@@ -87,6 +87,165 @@ export const PRODUCTS: Product[] = [
     stock: 999,
     rating: 4.7,
     reviewsCount: 78
+  },
+  {
+    id: 'old_creations',
+    name: 'Classic/Old Discord Creations',
+    nameAr: 'إنشاءات قديمة',
+    description: 'Get vintage Discord servers, pre-configured structures, and classic server setups with full ownership.',
+    descriptionAr: 'امتلك سيرفرات ديسكورد قديمة ومنشأة سابقاً، مهيأة بالكامل مع هيكلة كلاسيكية ونقل كامل للملكية والأمان.',
+    price: 99,
+    originalPrice: 199,
+    category: 'creations_custom',
+    image: 'https://images.unsplash.com/photo-1614741118887-7a4ee193a5fa?auto=format&fit=crop&w=600&q=80',
+    benefits: [
+      'Vintage creation server',
+      'Fully structured roles and permissions',
+      'Classic channels setup',
+      'Instant ownership transfer'
+    ],
+    benefitsAr: [
+      'تاريخ إنشاء قديم ومميز للسيرفر',
+      'رتب وصلاحيات مهيكلة بالكامل',
+      'رومات وتصنيفات كلاسيكية جاهزة',
+      'نقل كامل وسريع للملكية وآمن ١٠٠٪'
+    ],
+    stock: 5,
+    rating: 4.9,
+    reviewsCount: 12
+  },
+  {
+    id: 'old_accounts_creation',
+    name: 'Old Discord Accounts Creation',
+    nameAr: 'انشاءات حسابات قديمه',
+    description: 'Creation of old Discord accounts from years 2015 to 2020 with full email access and high trust score.',
+    descriptionAr: 'إنشاء حسابات ديسكورد قديمة (سنوات 2015 إلى 2020) مجهزة بالكامل مع بريد إلكتروني أساسي ونسبة ثقة عالية.',
+    price: 4,
+    originalPrice: 10,
+    category: 'old_accounts',
+    image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
+    benefits: [
+      'Vintage creation date (2015-2018)',
+      'Full original email access included',
+      'No previous bans or warnings',
+      'Highly secure and immediate delivery'
+    ],
+    benefitsAr: [
+      'تاريخ إنشاء قديم ومميز (2015 إلى 2018)',
+      'تسليم مع الإيميل الأساسي للحساب بالكامل',
+      'خالي من أي بلاغات أو مخالفات سابقة',
+      'آمن جداً ومحمي بضمان المتجر الفوري'
+    ],
+    stock: 12,
+    rating: 4.9,
+    reviewsCount: 45
+  },
+  {
+    id: 'bot_programming',
+    name: 'Custom Discord Bot Programming',
+    nameAr: 'برمجة بوتات مخصصة',
+    description: 'Professional custom Discord bot development tailored to your server requirements.',
+    descriptionAr: 'تصميم وبرمجة بوتات ديسكورد متكاملة ومخصصة بالكامل (حماية، ألعاب، رتب، إدارة، ترحيب) حسب رغبتك.',
+    price: 0,
+    originalPrice: 0,
+    priceOnRequest: true,
+    category: 'creations_custom',
+    image: 'https://images.unsplash.com/photo-1614064641938-3bbee52942c7?auto=format&fit=crop&w=600&q=80',
+    benefits: [
+      'Custom features & modules',
+      'High performance & uptime',
+      'Web dashboard integration',
+      'Free hosting support'
+    ],
+    benefitsAr: [
+      'ميزات مخصصة متكاملة حسب طلبك',
+      'أداء عالي وثبات ٢٤ ساعة دون انقطاع',
+      'إمكانية الربط بلوحة تحكم ويب',
+      'دعم الاستضافة المجانية للبوت'
+    ],
+    stock: 99,
+    rating: 4.8,
+    reviewsCount: 25
+  },
+  {
+    id: 'server_editing',
+    name: 'Discord Server Setup & Editing',
+    nameAr: 'تعديل سيرفرات ديسكورد',
+    description: 'Full decoration, structuring, and security implementation for new or existing Discord servers.',
+    descriptionAr: 'تنسيق وتصميم كامل وتعديل سيرفرات ديسكورد (سيرفرات ألعاب، مجتمعات، متاجر) من رتب ورومات وحماية أسطورية.',
+    price: 0,
+    originalPrice: 0,
+    priceOnRequest: true,
+    category: 'creations_custom',
+    image: 'https://images.unsplash.com/photo-1626544827763-d516dce335e2?auto=format&fit=crop&w=600&q=80',
+    benefits: [
+      'Complete roles & channels setup',
+      'Advanced auto-moderation systems',
+      'Professional widgets & aesthetics',
+      'Full technical support'
+    ],
+    benefitsAr: [
+      'تجهيز وتنسيق الرومات والرتب بالكامل',
+      'تفعيل أنظمة الحماية التلقائية المتقدمة',
+      'تصميم مظهري ولوحة ترحيب احترافية',
+      'دعم فني وتدريب على الإدارة مجاني'
+    ],
+    stock: 99,
+    rating: 4.9,
+    reviewsCount: 37
+  },
+  {
+    id: 'user_cool_940',
+    name: 'Premium Discord Username @940y',
+    nameAr: 'يوزر ثلاثي نادر @940y',
+    description: 'Ultra-rare premium 3-character Discord username available for immediate transfer.',
+    descriptionAr: 'يوزر ثلاثي فخم ونادر جداً (@940y) متاح للنقل المباشر لبروفايلك مع أمان وضمان كامل.',
+    price: 150,
+    originalPrice: 300,
+    category: 'users_premium',
+    image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80',
+    benefits: [
+      'Rare 4-letter/3-character tag',
+      'Safe transfer with no risk',
+      'Immediate delivery',
+      'Full guarantee'
+    ],
+    benefitsAr: [
+      'يوزر ثلاثي مميز وحصري جداً',
+      'نقل آمن تماماً بدون أي نسبة خطر',
+      'تسليم فوري خلال دقائق',
+      'ضمان شامل لملكية اليوزر مدى الحياة'
+    ],
+    stock: 1,
+    rating: 5.0,
+    reviewsCount: 8
+  },
+  {
+    id: 'user_cool_custom',
+    name: 'Custom Discord Username Order',
+    nameAr: 'طلب يوزر ديسكورد مخصص للطلب',
+    description: 'Order any specific available username or character combination you are looking for.',
+    descriptionAr: 'اطلب أي يوزر مخصص ترغب فيه (ثنائي، ثلاثي، رباعي، كلمات مميزة) وسنقوم باصطياده وتوفيره لك.',
+    price: 0,
+    originalPrice: 0,
+    priceOnRequest: true,
+    category: 'users_premium',
+    image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80',
+    benefits: [
+      'Choose any available combinations',
+      'Hunting specific usernames',
+      'Price determined by rarity',
+      'Fast delivery'
+    ],
+    benefitsAr: [
+      'اختيار يوزر من كتابتك ورغبتك',
+      'اصطياد مخصص وسريع لليوزرات',
+      'سعر مرن يحدد حسب ندرة اليوزر المطلوبة',
+      'تسليم وتواصل مباشر عبر ديسكورد'
+    ],
+    stock: 99,
+    rating: 4.9,
+    reviewsCount: 14
   }
 ];
 
@@ -165,7 +324,7 @@ export const FAQS: FAQ[] = [
   {
     id: 'faq_4',
     question: 'ما هي طرق الدفع المتوفرة والمشفرة بالمتجر؟',
-    answer: 'نوفر قنوات دفع آمنة ومشفرة بالكامل 100% تشمل: البطاقات البنكية (مدى، فيزا، ماستركارد)، Apple Pay، STC Pay، بالإضافة إلى التحويل البنكي المباشر (مصرف الراجحي أو البنك الأهلي السعودي) مع رفع صورة الإيصال للتحقق السريع.',
+    answer: 'نوفر قنوات دفع آمنة ومشفرة بالكامل 100% تشمل: البطاقات البنكية (تحويل بنكي (راجحي), ابل باي قريبا)، Apple Pay، STC Pay، بالإضافة إلى التحويل البنكي المباشر (مصرف الراجحي أو البنك الأهلي السعودي) مع رفع صورة الإيصال للتحقق السريع.',
     category: 'الدفع والأمان'
   }
 ];

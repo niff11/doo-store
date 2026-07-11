@@ -12,8 +12,8 @@ export default function FAQSection() {
 
   const filteredFaqs = FAQS.filter((faq) => {
     const matchesSearch =
-      faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      faq.answer.toLowerCase().includes(searchQuery.toLowerCase());
+      (faq.question || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
+      (faq.answer || '').toLowerCase().includes((searchQuery || '').toLowerCase());
     const matchesCategory = selectedCategory === 'الكل' || faq.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
