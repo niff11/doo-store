@@ -34,6 +34,7 @@ import TermsPage from './components/TermsPage';
 import ReviewsSection from './components/ReviewsSection';
 import LiveChat from './components/LiveChat';
 import AdminPanel from './components/AdminPanel';
+import UserProfile from './components/UserProfile';
 
 // Types and static data
 import { Product, CartItem, Order } from './types';
@@ -863,6 +864,14 @@ export default function App() {
                 onClearCart={handleClearCart}
                 onNavigate={(v, p) => handleNavigate(v, p)}
                 addToast={addToast}
+              />
+            )}
+
+            {/* VIEW 10: USER PROFILE & CREATIONS */}
+            {currentView === 'profile' && (
+              <UserProfile
+                addToast={addToast}
+                onNavigate={(v) => handleNavigate(v)}
               />
             )}
 

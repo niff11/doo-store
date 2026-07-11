@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingCart, Search, Menu, X, ShieldAlert, Sparkles, HelpCircle, MessageSquare, Terminal } from 'lucide-react';
+import { ShoppingCart, Search, Menu, X, ShieldAlert, Sparkles, HelpCircle, MessageSquare, Terminal, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CartItem } from '../types';
 
@@ -33,6 +33,7 @@ export default function Header({
     { label: categoryNames?.nitro || 'ديسكورد نيترو', view: 'nitro' },
     { label: categoryNames?.boosts || 'بوستات السيرفر', view: 'boosts' },
     { label: categoryNames?.effects || 'تأثيرات الملف', view: 'effects' },
+    { label: 'حسابي والإنشاءات 👤', view: 'profile' },
     { label: 'الأسئلة الشائعة', view: 'faq' },
     { label: 'شروط الخدمة', view: 'terms' },
     { label: 'تواصل معنا', view: 'contact' },
@@ -104,6 +105,19 @@ export default function Header({
             title="لوحة التحكم لإدارة المتجر"
           >
             <Terminal className="w-4.5 h-4.5" />
+          </button>
+
+          {/* User Profile Button */}
+          <button
+            onClick={() => onNavigate('profile')}
+            className={`p-2.5 rounded-xl cursor-pointer transition-all border relative ${
+              currentView === 'profile'
+                ? 'bg-discord-purple/20 border-discord-purple text-discord-purple'
+                : 'bg-discord-dark/50 border-white/5 text-gray-400 hover:text-white hover:border-discord-purple/40'
+            }`}
+            title="حسابي والإنشاءات المخصصة"
+          >
+            <User className="w-4.5 h-4.5" />
           </button>
 
           {/* Cart Status Indicator */}

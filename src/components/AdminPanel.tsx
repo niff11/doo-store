@@ -28,14 +28,19 @@ export default function AdminPanel({
   onUpdateAdminPasscode
 }: AdminPanelProps) {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'analytics' | 'admins'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'analytics' | 'admins' | 'users' | 'creations'>('orders');
 
   // Admins state
   const [admins, setAdmins] = useState<{ id: string; username: string; role: string; addedDate: string }[]>([]);
   const [newAdminUsername, setNewAdminUsername] = useState('');
   const [newAdminRole, setNewAdminRole] = useState('مشرف عام');
 
+  // Users and Creations local states
+  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+  const [creations, setCreations] = useState<any[]>([]);
+
   useEffect(() => {
+    // Load admins
     const savedAdmins = localStorage.getItem('doo_store_admins');
     if (savedAdmins) {
       setAdmins(JSON.parse(savedAdmins));
@@ -47,7 +52,55 @@ export default function AdminPanel({
       setAdmins(defaultAdmins);
       localStorage.setItem('doo_store_admins', JSON.stringify(defaultAdmins));
     }
+
+    // Load registered users
+    const savedUsers = localStorage.getItem('doo_registered_users');
+    if (savedUsers) {
+      setRegisteredUsers(JSON.parse(savedUsers));
+    } else {
+      const demoUsers = [
+        { username: 'خالد الحربي', email: 'khaled@gmail.com', discordId: 'khaled_99', joinedDate: '2026-07-08' },
+        { username: 'سعد العتيبي', email: 'saad_otb@outlook.com', discordId: 'saad_otb', joinedDate: '2026-07-09' }
+      ];
+      setRegisteredUsers(demoUsers);
+      localStorage.setItem('doo_registered_users', JSON.stringify(demoUsers));
+    }
+
+    // Load custom creations requests
+    const savedCreations = localStorage.getItem('doo_user_creations');
+    if (savedCreations) {
+      setCreations(JSON.parse(savedCreations));
+    } else {
+      const demoCreations = [
+        {
+          id: 'CR-908123',
+          username: 'خالد الحربي',
+          title: 'برمجة بوت متجر متكامل مع سلة سريعة',
+          category: 'custom_bot',
+          categoryAr: 'برمجة بوت مخصص متكامل',
+          description: 'أريد بوت يقوم بإدارة المنتجات وعرض الأكواد مباشرة وتلقائياً للأعضاء عند استخدام زر شراء.',
+          budget: '350 ريال',
+          discordId: 'khaled_99',
+          status: 'pending',
+          date: '2026-07-09'
+        }
+      ];
+      setCreations(demoCreations);
+      localStorage.setItem('doo_user_creations', JSON.stringify(demoCreations));
+    }
   }, []);
+
+  const handleUpdateCreationStatus = (creationId: string, status: any) => {
+    const updated = creations.map((c) => {
+      if (c.id === creationId) {
+        return { ...c, status };
+      }
+      return c;
+    });
+    setCreations(updated);
+    localStorage.setItem('doo_user_creations', JSON.stringify(updated));
+    addToast(`تم تحديث حالة طلب الإنشاء ${creationId} بنجاح! 🎨`);
+  };
 
   const handleAddAdmin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,7 +245,7 @@ export default function AdminPanel({
         </div>
 
         {/* Tab selection */}
-        <div className="flex gap-2 bg-discord-dark/50 border border-white/5 p-1 rounded-xl self-start">
+        <div className="flex flex-wrap gap-2 bg-discord-dark/50 border border-white/5 p-1 rounded-xl self-start">
           <button
             onClick={() => setActiveTab('orders')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -208,6 +261,22 @@ export default function AdminPanel({
             }`}
           >
             إدارة المخزون والأسعار
+          </button>
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'users' ? 'bg-discord-purple text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            إدارة المستخدمين ({registeredUsers.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('creations')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'creations' ? 'bg-discord-purple text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            طلبات الإنشاء والتصميم ({creations.length})
           </button>
           <button
             onClick={() => setActiveTab('analytics')}
@@ -659,6 +728,186 @@ export default function AdminPanel({
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Tab: USERS */}
+      {activeTab === 'users' && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-2xl bg-discord-dark border border-white/10 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div>
+                <h3 className="font-extrabold text-white text-base">إدارة أعضاء ومستخدمين المتجر</h3>
+                <p className="text-xs text-gray-400 mt-0.5">قائمة بجميع العملاء المسجلين بالمتجر ونشاط طلباتهم.</p>
+              </div>
+              <span className="bg-discord-purple/20 text-discord-purple border border-discord-purple/30 text-xs px-3 py-1 rounded-full font-bold">
+                {registeredUsers.length} عضو مسجل
+              </span>
+            </div>
+
+            <div className="overflow-x-auto border border-white/5 rounded-xl">
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="bg-black/25 border-b border-white/5 text-[11px] text-gray-400 uppercase tracking-wider">
+                    <th className="p-4">العضو / الاسم</th>
+                    <th className="p-4">البريد الإلكتروني</th>
+                    <th className="p-4">حساب ديسكورد</th>
+                    <th className="p-4">تاريخ التسجيل</th>
+                    <th className="p-4 text-center">الطلبات والمشتريات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 text-xs text-gray-300">
+                  {registeredUsers.map((u, index) => {
+                    const userOrdersCount = orders.filter(
+                      (o) => 
+                        o.email.toLowerCase() === u.email.toLowerCase() || 
+                        o.discordUsername.toLowerCase() === u.discordId.toLowerCase()
+                    ).length;
+
+                    return (
+                      <tr key={index} className="hover:bg-white/5 transition-colors">
+                        <td className="p-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-discord-purple/20 to-discord-fuchsia/20 border border-discord-purple/30 flex items-center justify-center font-bold text-discord-fuchsia font-sans text-xs">
+                              {u.username.slice(0, 1).toUpperCase()}
+                            </div>
+                            <span className="font-bold text-white">{u.username}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 font-mono text-gray-400 text-[11px]">
+                          {u.email}
+                        </td>
+                        <td className="p-4 font-mono text-discord-purple text-[11px]" dir="ltr">
+                          @{u.discordId}
+                        </td>
+                        <td className="p-4 text-gray-400">
+                          {u.joinedDate || '2026-07-10'}
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className={`inline-block px-2.5 py-1 rounded-full font-bold text-[10px] ${
+                            userOrdersCount > 0 
+                              ? 'bg-discord-green/10 text-discord-green border border-discord-green/20' 
+                              : 'bg-white/5 text-gray-400'
+                          }`}>
+                            {userOrdersCount} طلبات
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: CREATIONS (CUSTOM PROJECTS) */}
+      {activeTab === 'creations' && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-2xl bg-discord-dark border border-white/10 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div>
+                <h3 className="font-extrabold text-white text-base">طلبات ديسكورد الإنشائية والتصاميم المخصصة</h3>
+                <p className="text-xs text-gray-400 mt-0.5">مراجعة والتحكم في حالات طلبات برمجة البوتات، تجهيز السيرفرات والتصاميم الجرافيكية المخصصة.</p>
+              </div>
+              <span className="bg-discord-fuchsia/20 text-discord-fuchsia border border-discord-fuchsia/30 text-xs px-3 py-1 rounded-full font-bold">
+                {creations.length} طلبات مشاريع
+              </span>
+            </div>
+
+            {creations.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                لا توجد طلبات إنشاء مخصصة حالياً.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {creations.map((c) => (
+                  <div 
+                    key={c.id} 
+                    className="p-5 rounded-xl bg-discord-darker/70 border border-white/5 space-y-4 hover:border-discord-purple/20 transition-all flex flex-col justify-between text-right"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-discord-fuchsia font-bold uppercase">📁 {c.categoryAr}</span>
+                          <h4 className="font-extrabold text-white text-sm">{c.title}</h4>
+                        </div>
+                        <span className="font-mono text-[10px] text-gray-500">ID: {c.id}</span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400 bg-black/10 p-2.5 rounded-lg border border-white/5">
+                        <span>👤 طالب الخدمة: <span className="font-bold text-white">{c.username}</span></span>
+                        <span>•</span>
+                        <span dir="ltr">🎮 ديسكورد: <span className="font-bold text-discord-purple font-mono">@{c.discordId}</span></span>
+                        <span>•</span>
+                        <span>📅 التاريخ: {c.date}</span>
+                      </div>
+
+                      <div className="text-xs text-gray-300 bg-black/35 p-3.5 rounded-xl border border-white/5 whitespace-pre-wrap leading-relaxed">
+                        {c.description}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 pt-3 border-t border-white/5 mt-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-400">💰 الميزانية المقترحة:</span>
+                        <span className="font-black text-white text-sm font-sans">{c.budget}</span>
+                      </div>
+
+                      {/* Status controls */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-gray-400 block">تحديث حالة طلب المشروع:</label>
+                        <div className="grid grid-cols-5 gap-1 bg-black/30 p-1 rounded-lg border border-white/5 text-[10px] font-bold">
+                          <button
+                            onClick={() => handleUpdateCreationStatus(c.id, 'pending')}
+                            className={`py-1.5 rounded text-center cursor-pointer transition-all ${
+                              c.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            مراجعة
+                          </button>
+                          <button
+                            onClick={() => handleUpdateCreationStatus(c.id, 'processing')}
+                            className={`py-1.5 rounded text-center cursor-pointer transition-all ${
+                              c.status === 'processing' ? 'bg-blue-500/20 text-blue-500 border border-blue-500/30' : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            عمل
+                          </button>
+                          <button
+                            onClick={() => handleUpdateCreationStatus(c.id, 'approved')}
+                            className={`py-1.5 rounded text-center cursor-pointer transition-all ${
+                              c.status === 'approved' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            اعتماد
+                          </button>
+                          <button
+                            onClick={() => handleUpdateCreationStatus(c.id, 'completed')}
+                            className={`py-1.5 rounded text-center cursor-pointer transition-all ${
+                              c.status === 'completed' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            تسليم
+                          </button>
+                          <button
+                            onClick={() => handleUpdateCreationStatus(c.id, 'rejected')}
+                            className={`py-1.5 rounded text-center cursor-pointer transition-all ${
+                              c.status === 'rejected' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
