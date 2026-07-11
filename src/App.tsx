@@ -57,56 +57,41 @@ export default function App() {
   const [adminEmail, setAdminEmail] = useState<string>(() => {
     return localStorage.getItem('doo_admin_email') || 'ahmed.amk208@gmail.com';
   });
-  const [categoryNames, setCategoryNames] = useState({
-    nitro: 'ديسكورد نيترو',
-    boosts: 'بوستات السيرفر',
-    effects: 'تأثيرات الملف الشخصي',
-    users_premium: 'يوزرات مميزة',
-    creations_custom: 'إنشاءات',
-    old_accounts: 'old accounts',
-  });
-  
-  // Custom Toasts state
-  const [toasts, setToasts] = useState<{ id: string; text: string }[]>([]);
+const [categoryNames, setCategoryNames] = useState({
+  nitro: 'Nitro 1 month',
+  boosts: 'Discord Server Boost',
+  effects: 'Effects',
+  users_premium: 'users',
+  creations_custom: 'Custom Creationns',
+  old_accounts: 'old accounts',
+});
 
-  // Simulated live purchases to create social proof
-  const [liveNotification, setLiveNotification] = useState<{ name: string; action: string; time: string } | null>(null);
+// Custom Toasts state
+const [toasts, setToasts] = useState<{ id: string; text: string }[]>([]);
 
-  // Load cart, categories and products on mount
-  useEffect(() => {
-    const savedCart = localStorage.getItem('doo_store_cart');
-    if (savedCart) {
-      setCartItems(JSON.parse(savedCart));
-    }
-    const savedNames = localStorage.getItem('doo_store_category_names');
-    if (savedNames) {
-      setCategoryNames(JSON.parse(savedNames));
-    }
-    const savedProducts = localStorage.getItem('doo_store_products');
-    if (savedProducts) {
-      const parsed = JSON.parse(savedProducts);
-      const hasOldAccounts = parsed.some((p: any) => p.id === 'old_accounts_creation');
-      if (!hasOldAccounts) {
-        // Append old_accounts_creation to existing storage or reload
-        const freshProducts = [...parsed];
-        const targetProduct = PRODUCTS.find(p => p.id === 'old_accounts_creation');
-        if (targetProduct) {
-          freshProducts.push(targetProduct);
-          setProducts(freshProducts);
-          localStorage.setItem('doo_store_products', JSON.stringify(freshProducts));
-        } else {
-          setProducts(PRODUCTS);
-          localStorage.setItem('doo_store_products', JSON.stringify(PRODUCTS));
-        }
-      } else {
-        setProducts(parsed);
-      }
-    } else {
-      setProducts(PRODUCTS);
-      localStorage.setItem('doo_store_products', JSON.stringify(PRODUCTS));
-    }
-  }, []);
+// Simulated live purchases to create social proof
+const [liveNotification, setLiveNotification] = useState<{
+  name: string;
+  action: string;
+  time: string;
+} | null>(null);
 
+// Load cart, categories and products on mount
+useEffect(() => {
+  const savedCart = localStorage.getItem('doo_store_cart');
+  if (savedCart) {
+    setCartItems(JSON.parse(savedCart));
+  }
+
+  const savedNames = localStorage.getItem('doo_store_category_names');
+  if (savedNames) {
+    setCategoryNames(JSON.parse(savedNames));
+  }
+
+  // استخدم المنتجات الموجودة في data.ts دائماً
+  setProducts(PRODUCTS);
+  localStorage.setItem('doo_store_products', JSON.stringify(PRODUCTS));
+}, []);
   const handleUpdateCategoryNames = (names: { nitro: string; boosts: string; effects: string; users_premium?: string; creations_custom?: string; old_accounts?: string }) => {
     setCategoryNames(names as any);
     localStorage.setItem('doo_store_category_names', JSON.stringify(names));
