@@ -1041,7 +1041,7 @@ useEffect(() => {
                             <div className="absolute top-2 right-2 bg-discord-purple text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow">شعبية فائقة 🔥</div>
                           </div>
                           <div className="space-y-2">
-                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold text-discord-fuchsia bg-discord-fuchsia/10 rounded">حسابات قديمة ⏱️</span>
+                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold text-discord-fuchsia bg-discord-fuchsia/10 rounded">old accounts</span>
                             <h3 className="font-extrabold text-base text-white">{cProd.nameAr}</h3>
                             <p className="text-xs text-gray-400 leading-relaxed line-clamp-3">{cProd.descriptionAr}</p>
                           </div>
