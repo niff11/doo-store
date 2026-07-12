@@ -94,6 +94,60 @@ export default function AdminPanel({
   const [viewedEmailSubject, setViewedEmailSubject] = useState<string | null>(null);
   const [deleteConfirmationOrderId, setDeleteConfirmationOrderId] = useState<string | null>(null);
 
+  // Sound Notification state & logic
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('doo_admin_sound_enabled') !== 'false';
+  });
+
+  const playNotificationSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      const playTone = (freq: number, start: number, duration: number, type: OscillatorType = 'sine') => {
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, start);
+        
+        gainNode.gain.setValueAtTime(0.15, start);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, start + duration);
+        
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        osc.start(start);
+        osc.stop(start + duration);
+      };
+      
+      const now = audioCtx.currentTime;
+      // Beautiful chime tones: E5 (659.25 Hz) then A5 (880.00 Hz) slightly staggered
+      playTone(659.25, now, 0.4, 'sine');
+      playTone(880.00, now + 0.08, 0.5, 'sine');
+    } catch (error) {
+      console.error('Failed to play notification chime:', error);
+    }
+  };
+
+  useEffect(() => {
+    const handleNewOrder = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const order = customEvent.detail;
+      console.log('AdminPanel received new order via custom event:', order);
+      
+      if (soundEnabled) {
+        playNotificationSound();
+      }
+      
+      addToast(`🔔 طلب جديد فوري! رقم: ${order.id} | العميل: ${order.customerName}`);
+    };
+
+    window.addEventListener('supabase_new_order', handleNewOrder);
+    return () => {
+      window.removeEventListener('supabase_new_order', handleNewOrder);
+    };
+  }, [soundEnabled, addToast]);
+
   // Admins state
   const [admins, setAdmins] = useState<{ id: string; username: string; role: string; addedDate: string }[]>([]);
   const [newAdminUsername, setNewAdminUsername] = useState('');
@@ -608,7 +662,7 @@ export default function AdminPanel({
               activeTab === ('emails' as any) ? 'bg-discord-purple text-white' : 'text-gray-400 hover:text-white'
             }`}
           >
-            تنبيهات البريد الآلية ({emailLogs.length})
+            إعدادات وتنبيهات المنصة ⚙️
           </button>
         </div>
       </div>
@@ -1360,6 +1414,55 @@ export default function AdminPanel({
       {/* Tab: AUTOMATED EMAILS AUDIT LOG */}
       {activeTab === ('emails' as any) && (
         <div className="space-y-6">
+          {/* Sound Notification Settings Card */}
+          <div className="p-6 rounded-2xl bg-[#1e1f22]/90 border border-discord-purple/30 space-y-4 shadow-2xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="font-extrabold text-white text-base">🔊 نظام الإشعارات الصوتية للطلبات الجديدة</h3>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  تنشيط رنين تنبيه صوتي فوري في هذه الصفحة عند استقبال طلب جديد عبر Supabase Realtime بالوقت الفعلي.
+                </p>
+              </div>
+              
+              {/* Toggle Switch */}
+              <button
+                onClick={() => {
+                  const newVal = !soundEnabled;
+                  setSoundEnabled(newVal);
+                  localStorage.setItem('doo_admin_sound_enabled', String(newVal));
+                  addToast(newVal ? '🔊 تم تفعيل جرس الإشعارات الصوتية بنجاح!' : '🔇 تم كتم جرس الإشعارات الصوتية.');
+                  if (newVal) {
+                    playNotificationSound(); // Play test tone
+                  }
+                }}
+                className={`w-14 h-7 rounded-full transition-all relative flex items-center p-1 cursor-pointer outline-none shrink-0 ${
+                  soundEnabled ? 'bg-discord-green' : 'bg-gray-600'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white shadow-md transition-all transform ${
+                    soundEnabled ? '-translate-x-7' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/5">
+              <button
+                onClick={() => {
+                  playNotificationSound();
+                  addToast('🎵 جاري تجربة نغمة الرنين...');
+                }}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded-xl border border-white/5 cursor-pointer transition-all flex items-center gap-2"
+              >
+                <span>تجربة نغمة التنبيه 🎵</span>
+              </button>
+              <span className="text-[11px] text-gray-400">
+                الحالة الحالية: {soundEnabled ? <span className="text-discord-green font-bold">مفعل وجاهز للرنين 🟢</span> : <span className="text-red-400 font-bold">صامت/مكتوم 🔴</span>}
+              </span>
+            </div>
+          </div>
+
           {/* Configure Admin Email Card */}
           <div className="p-6 rounded-2xl bg-[#1e1f22]/90 border border-discord-purple/30 space-y-4 shadow-2xl">
             <h3 className="font-extrabold text-white text-base">⚙️ إعدادات التنبيهات البريدية الآلية للمدير</h3>

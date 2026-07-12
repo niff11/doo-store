@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Order } from '../types';
 import { Printer, ShieldCheck, Calendar, Hash, Tag, Coins, User, Check, Hourglass, Settings, AlertTriangle } from 'lucide-react';
 
@@ -9,6 +9,7 @@ interface OrderReceiptProps {
 
 export default function OrderReceipt({ order, onClose }: OrderReceiptProps) {
   const printRef = useRef<HTMLDivElement>(null);
+  const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
 
   const handlePrint = () => {
     // Hide everything except the receipt during print using temporary styles
@@ -225,6 +226,26 @@ export default function OrderReceipt({ order, onClose }: OrderReceiptProps) {
                 <span className="text-discord-purple font-mono font-bold">مرجع: #{order.paymentDetails.referenceNumber}</span>
               )}
             </div>
+
+            {order.paymentDetails?.receiptUrl && (
+              <div className="pt-2.5 mt-2 border-t border-white/5 space-y-1.5 no-print">
+                <span className="text-[10px] text-gray-400 block font-bold">صورة إيصال السداد المرفقة:</span>
+                <div className="relative group overflow-hidden rounded-lg border border-white/10 bg-black/35 flex items-center justify-center p-1.5">
+                  <img
+                    src={order.paymentDetails.receiptUrl}
+                    alt="إيصال السداد"
+                    className="max-h-28 object-contain rounded cursor-pointer hover:scale-105 transition-all duration-300"
+                    onClick={() => setModalImageUrl(order.paymentDetails?.receiptUrl || null)}
+                    referrerPolicy="no-referrer"
+                  />
+                  <div 
+                    className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300 cursor-pointer pointer-events-none animate-fade-in"
+                  >
+                    <span className="text-[9px] text-white bg-black/75 px-2 py-1 rounded font-bold">تكبير الصورة 🔍</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Receipt Footer Message */}
@@ -254,6 +275,26 @@ export default function OrderReceipt({ order, onClose }: OrderReceiptProps) {
         </div>
 
       </div>
+
+      {/* Full Screen Image Modal */}
+      {modalImageUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm no-print">
+          <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center justify-center">
+            <button
+              onClick={() => setModalImageUrl(null)}
+              className="absolute -top-12 right-0 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all cursor-pointer z-50"
+            >
+              إغلاق ✕
+            </button>
+            <img
+              src={modalImageUrl}
+              alt="إيصال السداد بالحجم الكامل"
+              className="max-w-full max-h-[80vh] object-contain rounded-2xl border border-white/10 shadow-2xl"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

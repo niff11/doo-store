@@ -183,7 +183,7 @@ export default function ProductDetails({ product, onAddToCart, onNavigate, addTo
     addToast('🚀 تم إرسال طلب تزيين الملف الشخصي! سيقوم الدعم بإرسال السعر والبدء بالتفعيل فوراً.');
   };
 
-  const handleDirectCreationOrder = () => {
+  const handleDirectCreationOrder = async () => {
     if (!discordTag.trim()) {
       addToast('⚠️ الرجاء إدخال رابط السيرفر او اسم حسابك!');
       return;
@@ -225,7 +225,12 @@ export default function ProductDetails({ product, onAddToCart, onNavigate, addTo
     };
 
     // Save Order to history (both Supabase & local storage fallback)
-    saveOrder(newOrder);
+    const isSaved = await saveOrder(newOrder);
+
+    if (!isSaved) {
+      addToast('❌ عذراً، فشل في حفظ وإرسال الطلب لقاعدة البيانات. يرجى المحاولة مرة أخرى!');
+      return;
+    }
 
     // Emit event so live notification is triggered!
     window.dispatchEvent(new CustomEvent('new_order_placed', { detail: newOrder }));

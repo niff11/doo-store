@@ -114,7 +114,13 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
       };
 
       // Save Order to history (both Supabase & local storage fallback)
-      await saveOrder(newOrder);
+      const isSaved = await saveOrder(newOrder);
+
+      if (!isSaved) {
+        addToast('❌ عذراً، حدث خطأ أثناء حفظ طلبك في قاعدة البيانات. يرجى المحاولة مرة أخرى!');
+        setPaymentStep('cart');
+        return;
+      }
 
       // Generate simulation Activation Codes (e.g. Nitro code link or Bot invite URL)
       const codes = cartItems.map((item) => {

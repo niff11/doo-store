@@ -39,7 +39,7 @@ import UserProfile from './components/UserProfile';
 import OrderReceipt from './components/OrderReceipt';
 
 // Import Supabase helpers
-import { getProducts, createProductInDb, updateProductInDb, deleteProductFromDb, getOrders, saveOrder, updateOrderInDb } from './lib/supabase';
+import { getProducts, createProductInDb, updateProductInDb, deleteProductFromDb, getOrders, saveOrder, updateOrderInDb, supabase, isSupabaseConfigured, mapOrderRow } from './lib/supabase';
 
 // Types and static data
 import { Product, CartItem, Order } from './types';
@@ -67,11 +67,11 @@ export default function App() {
   });
   const [categoryNames, setCategoryNames] = useState({
     nitro: 'Nitro 1 month',
-    boosts: 'Boosts',
-    effects: 'Effect',
-    users_premium: 'users',
+    boosts: ' Boosts',
+    effects: 'Effects',
+    users_premium: ' Usernames',
     creations_custom: 'Discord server modifications',
-    old_accounts: 'Old accounts'
+    old_accounts: 'Old accounts',
   });
   
   // Custom Toasts state
@@ -108,6 +108,55 @@ export default function App() {
       }
     }
     fetchBackendData();
+  }, []);
+
+  // Supabase Realtime subscription for orders
+  useEffect(() => {
+    if (isSupabaseConfigured && supabase) {
+      console.log('Subscribing to Supabase Realtime for orders...');
+      const channel = supabase
+        .channel('public-orders-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen to INSERT, UPDATE, DELETE
+            schema: 'public',
+            table: 'orders',
+          },
+          (payload) => {
+            console.log('Realtime change received for orders:', payload);
+            const eventType = payload.eventType;
+
+            if (eventType === 'INSERT') {
+              const newOrder = mapOrderRow(payload.new);
+              setOrders((prev) => {
+                if (prev.some((o) => o.id === newOrder.id)) return prev;
+                // Dispatch custom event for real-time notification audio & alerts
+                window.dispatchEvent(new CustomEvent('supabase_new_order', { detail: newOrder }));
+                return [newOrder, ...prev];
+              });
+            } else if (eventType === 'UPDATE') {
+              const updatedOrder = mapOrderRow(payload.new);
+              setOrders((prev) =>
+                prev.map((o) => (o.id === updatedOrder.id ? updatedOrder : o))
+              );
+            } else if (eventType === 'DELETE') {
+              const deletedId = payload.old?.id;
+              if (deletedId) {
+                setOrders((prev) => prev.filter((o) => o.id !== deletedId));
+              }
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log(`Supabase Realtime orders subscription status: ${status}`);
+        });
+
+      return () => {
+        console.log('Unsubscribing from Supabase Realtime for orders...');
+        supabase.removeChannel(channel);
+      };
+    }
   }, []);
 
   const handleUpdateCategoryNames = (names: { nitro: string; boosts: string; effects: string; users_premium?: string; creations_custom?: string; old_accounts?: string }) => {

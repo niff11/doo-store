@@ -268,6 +268,27 @@ export async function uploadProductImage(file: File): Promise<string> {
 }
 
 /**
+ * Helper to map database order records to Order interface types
+ */
+export function mapOrderRow(item: any): Order {
+  return {
+    id: item.id,
+    customerName: item.customer_name,
+    email: item.email,
+    discordUsername: item.discord_username,
+    items: typeof item.items === 'string' ? JSON.parse(item.items) : item.items,
+    total: Number(item.total),
+    paymentMethod: item.payment_method,
+    paymentDetails: typeof item.payment_details === 'string' ? JSON.parse(item.payment_details) : item.payment_details,
+    status: item.status,
+    date: item.date,
+    timestamp: item.timestamp,
+    trackingCode: item.tracking_code,
+    alerts: typeof item.alerts === 'string' ? JSON.parse(item.alerts) : item.alerts || []
+  };
+}
+
+/**
  * Get all orders from Supabase
  */
 export async function getOrders(): Promise<Order[]> {
@@ -281,21 +302,7 @@ export async function getOrders(): Promise<Order[]> {
       if (error) {
         console.error('Supabase orders fetch error:', error);
       } else if (data) {
-        return data.map((item: any) => ({
-          id: item.id,
-          customerName: item.customer_name,
-          email: item.email,
-          discordUsername: item.discord_username,
-          items: typeof item.items === 'string' ? JSON.parse(item.items) : item.items,
-          total: Number(item.total),
-          paymentMethod: item.payment_method,
-          paymentDetails: typeof item.payment_details === 'string' ? JSON.parse(item.payment_details) : item.payment_details,
-          status: item.status,
-          date: item.date,
-          timestamp: item.timestamp,
-          trackingCode: item.tracking_code,
-          alerts: typeof item.alerts === 'string' ? JSON.parse(item.alerts) : item.alerts || []
-        }));
+        return data.map((item: any) => mapOrderRow(item));
       }
     } catch (e) {
       console.error('Supabase orders fetch failed:', e);
