@@ -66,12 +66,12 @@ export default function App() {
     return localStorage.getItem('doo_admin_email') || 'ahmed.amk208@gmail.com';
   });
   const [categoryNames, setCategoryNames] = useState({
-    nitro: 'ديسكورد نيترو',
-    boosts: 'بوستات السيرفر',
-    effects: 'تأثيرات الملف الشخصي',
-    users_premium: 'يوزرات مميزة',
-    creations_custom: 'إنشاءات',
-    old_accounts: 'Old acc',
+    nitro: 'Nitro 1 month',
+    boosts: 'Boosts',
+    effects: 'Effect',
+    users_premium: 'users',
+    creations_custom: 'Discord server modifications',
+    old_accounts: 'Old accounts'
   });
   
   // Custom Toasts state

@@ -196,7 +196,7 @@ export const PRODUCTS: Product[] = [
     nameAr: 'sold out',
     description: 'Ultra-rare premium 3-character Discord username available for immediate transfer.',
     descriptionAr: '',
-    price: 150$,
+    price: 150,
     originalPrice: 300,
     category: 'users_premium',
     image: 'https://cdn.discordapp.com/attachments/956974533263376434/1525602049977487510/EEDA174D-3FAB-44A0-B14D-1F95B4B9BA1A.png?ex=6a54a3e1&is=6a535261&hm=8f85d1eb2985f6da80bc9298cf0154eebc5937d0458a269a51440bd697f65b51&',
