@@ -3,17 +3,21 @@ import { Terminal, Shield, TrendingUp, RefreshCw, Layers, CheckSquare, Edit3, Se
 import { motion } from 'motion/react';
 import { Product, Order } from '../types';
 import { PRODUCTS } from '../data';
+import OrderReceipt from './OrderReceipt';
+import { uploadProductImage, saveOrder, deleteOrderFromDb } from '../lib/supabase';
 
 interface AdminPanelProps {
   products: Product[];
+  orders: Order[];
+  onUpdateOrders: (orders: Order[]) => void;
   onUpdateProductPrice: (id: string, price: number) => void;
   onUpdateProductStock: (id: string, stock: number) => void;
   onUpdateProductImage: (id: string, image: string) => void;
   onUpdateProduct?: (id: string, updatedFields: Partial<Product>) => void;
   onCreateProduct?: (p: Product) => void;
   onDeleteProduct?: (id: string) => void;
-  categoryNames?: { nitro: string; boosts: string; effects: string; users_premium?: string; creations_custom?: string };
-  onUpdateCategoryNames?: (names: { nitro: string; boosts: string; effects: string; users_premium?: string; creations_custom?: string }) => void;
+  categoryNames?: { nitro: string; boosts: string; effects: string; users_premium?: string; creations_custom?: string; old_accounts?: string };
+  onUpdateCategoryNames?: (names: { nitro: string; boosts: string; effects: string; users_premium?: string; creations_custom?: string; old_accounts?: string }) => void;
   addToast: (msg: string) => void;
   adminPasscode: string;
   onUpdateAdminPasscode: (code: string) => void;
@@ -21,6 +25,8 @@ interface AdminPanelProps {
 
 export default function AdminPanel({
   products,
+  orders = [],
+  onUpdateOrders,
   onUpdateProductPrice,
   onUpdateProductStock,
   onUpdateProductImage,
@@ -33,11 +39,57 @@ export default function AdminPanel({
   adminPasscode,
   onUpdateAdminPasscode
 }: AdminPanelProps) {
-  const [orders, setOrders] = useState<Order[]>([]);
   const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'analytics' | 'admins' | 'users' | 'creations'>('orders');
   
+  // Automated client email notification states
+  const [emailMethod, setEmailMethod] = useState<'simulation' | 'emailjs' | 'supabase_edge'>(() => {
+    return (localStorage.getItem('doo_email_method') as any) || 'simulation';
+  });
+  const [emailjsServiceId, setEmailjsServiceId] = useState(() => localStorage.getItem('doo_emailjs_service_id') || '');
+  const [emailjsTemplateId, setEmailjsTemplateId] = useState(() => localStorage.getItem('doo_emailjs_template_id') || '');
+  const [emailjsPublicKey, setEmailjsPublicKey] = useState(() => localStorage.getItem('doo_emailjs_public_key') || '');
+  const [supabaseEdgeUrl, setSupabaseEdgeUrl] = useState(() => localStorage.getItem('doo_supabase_edge_url') || '');
+
+  // Storage image upload states
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadingProductId, setUploadingProductId] = useState<string | null>(null);
+
+  const handleNewProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setIsUploading(true);
+    try {
+      addToast('⏳ جاري رفع الصورة إلى Supabase Bucket...');
+      const publicUrl = await uploadProductImage(file);
+      setNewProdImage(publicUrl);
+      addToast('✅ تم رفع الصورة بنجاح وتعيين الرابط!');
+    } catch (err: any) {
+      addToast(`❌ فشل رفع الصورة: ${err.message || err}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleEditProductImageUpload = async (productId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setUploadingProductId(productId);
+    try {
+      addToast('⏳ جاري رفع الصورة وتحديث المنتج في قاعدة البيانات...');
+      const publicUrl = await uploadProductImage(file);
+      onUpdateProductImage(productId, publicUrl);
+      addToast('✅ تم تحديث صورة المنتج بنجاح في Supabase!');
+    } catch (err: any) {
+      addToast(`❌ فشل رفع الصورة: ${err.message || err}`);
+    } finally {
+      setUploadingProductId(null);
+    }
+  };
+
   // Custom states for dialogs to prevent alert()/confirm() failures inside iframe
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);
+  const [viewerImageTitle, setViewerImageTitle] = useState<string>('عرض إيصال السداد المرفق 📄');
+  const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<Order | null>(null);
   const [viewedEmailBody, setViewedEmailBody] = useState<string | null>(null);
   const [viewedEmailSubject, setViewedEmailSubject] = useState<string | null>(null);
   const [deleteConfirmationOrderId, setDeleteConfirmationOrderId] = useState<string | null>(null);
@@ -249,58 +301,181 @@ export default function AdminPanel({
     }
   };
 
-  useEffect(() => {
-    const savedOrders = localStorage.getItem('doo_store_orders');
-    if (savedOrders) {
-      setOrders(JSON.parse(savedOrders));
-    } else {
-      // Seed a couple of mock orders to show on first load
-      const seedOrders: Order[] = [
-        {
-          id: 'DOO-928401',
-          customerName: 'فهد المطيري',
-          email: 'fahad@gmail.com',
-          discordUsername: 'fahad_55',
-          items: [
-            { product: PRODUCTS[0], quantity: 1 } // Discord Nitro
-          ],
-          total: 20,
-          paymentMethod: 'credit_card',
-          paymentDetails: { cardNumber: '**** **** **** 4810' },
-          status: 'completed',
-          date: '2026-07-09',
-          trackingCode: 'TRK-9831048'
-        },
-        {
-          id: 'DOO-481029',
-          customerName: 'فيصل السديري',
-          email: 'faisal@sod.com',
-          discordUsername: 'faisal_sd',
-          items: [
-            { product: PRODUCTS[1], quantity: 1 } // Server Boosts 14
-          ],
-          total: 83,
-          paymentMethod: 'bank_transfer',
-          paymentDetails: { referenceNumber: 'REF-30198' },
-          status: 'pending',
-          date: '2026-07-10',
+  const sendCustomerCompletedEmail = async (order: Order) => {
+    const itemsText = order.items.map(item => `${item.product.nameAr} (الكمية: ${item.quantity})`).join('، ');
+    
+    const emailBody = `مرحباً ${order.customerName || 'عميلنا العزيز'}،
+    
+يسعدنا إبلاغك بأنه تم اكتمال وتفعيل طلبك بنجاح في متجر Doo! 🎉
+
+تفاصيل طلبك المكتمل:
+• رقم الطلب: ${order.id}
+• المنتجات: ${itemsText}
+• المبلغ الإجمالي: ${order.total} ريال سعودي
+• حساب الديسكورد للتسليم: ${order.discordUsername || 'غير محدد'}
+
+نشكرك على ثقتك بمتجرنا واختيارك خدماتنا. إذا كان لديك أي استفسار، لا تتردد في فتح تذكرة دعم فني بسيرفر الديسكورد الخاص بنا.
+
+مع تحيات،
+إدارة متجر Doo 💜`;
+
+    const subject = `✅ تم اكتمال طلبك رقم #${order.id} بنجاح! - متجر Doo`;
+
+    const method = localStorage.getItem('doo_email_method') || 'simulation';
+    const serviceId = localStorage.getItem('doo_emailjs_service_id') || '';
+    const templateId = localStorage.getItem('doo_emailjs_template_id') || '';
+    const publicKey = localStorage.getItem('doo_emailjs_public_key') || '';
+    const edgeUrl = localStorage.getItem('doo_supabase_edge_url') || '';
+
+    let success = false;
+    let errorMsg = '';
+
+    try {
+      if (method === 'emailjs') {
+        if (!serviceId || !templateId || !publicKey) {
+          throw new Error('بيانات EmailJS غير مكتملة في الإعدادات!');
         }
-      ];
-      setOrders(seedOrders);
-      localStorage.setItem('doo_store_orders', JSON.stringify(seedOrders));
+        
+        const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            service_id: serviceId,
+            template_id: templateId,
+            user_id: publicKey,
+            template_params: {
+              customer_name: order.customerName,
+              customer_email: order.email,
+              order_id: order.id,
+              total_amount: order.total,
+              items: itemsText,
+              discord_username: order.discordUsername,
+              subject: subject,
+              message_body: emailBody
+            }
+          })
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(errText || 'فشل إرسال البريد عبر EmailJS');
+        }
+        success = true;
+      } else if (method === 'supabase_edge') {
+        if (!edgeUrl) {
+          throw new Error('رابط Supabase Edge Function غير مكتوب في الإعدادات!');
+        }
+        
+        const response = await fetch(edgeUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: order.id,
+            customerName: order.customerName,
+            email: order.email,
+            discordUsername: order.discordUsername,
+            total: order.total,
+            items: itemsText,
+            subject: subject,
+            message: emailBody
+          })
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(errText || 'فشل إرسال البريد عبر Supabase Edge Function');
+        }
+        success = true;
+      } else {
+        // Simulation mode
+        success = true;
+      }
+    } catch (err: any) {
+      console.error('Email send failure:', err);
+      errorMsg = err.message || 'فشل الاتصال بمزود خدمة البريد';
     }
-  }, []);
+
+    // Log the email in doo_sent_emails
+    const savedEmails = localStorage.getItem('doo_sent_emails');
+    const currentEmails = savedEmails ? JSON.parse(savedEmails) : [];
+    
+    const newEmailLog = {
+      id: `EML-${Math.floor(100000 + Math.random() * 900000)}`,
+      recipient: order.email || 'customer@doo.store',
+      subject: subject,
+      body: emailBody,
+      status: success ? 'success' : 'failed',
+      error: errorMsg || undefined,
+      date: new Date().toISOString().replace('T', ' ').substring(0, 19)
+    };
+
+    const updatedLogs = [newEmailLog, ...currentEmails];
+    setEmailLogs(updatedLogs);
+    localStorage.setItem('doo_sent_emails', JSON.stringify(updatedLogs));
+
+    if (success) {
+      if (method === 'simulation') {
+        addToast(`📧 تم إرسال تنبيه بريدي تلقائي (محاكاة) للعميل على: ${order.email}`);
+      } else {
+        addToast(`📧 تم إرسال التنبيه البريدي الفعلي للعميل عبر ${method === 'emailjs' ? 'EmailJS' : 'Supabase Edge'} بنجاح!`);
+      }
+    } else {
+      addToast(`❌ فشل إرسال البريد التلقائي للعميل: ${errorMsg}`);
+    }
+  };
 
   const handleUpdateOrderStatus = (orderId: string, status: Order['status']) => {
+    let alertMessage = '';
+    let statusLabel = '';
+    
+    if (status === 'processing') {
+      alertMessage = `تنبيه: تم تحديث حالة طلبك #${orderId} إلى (قيد المعالجة) وجاري تنفيذ وتفعيل الخدمة الآن! ⚙️`;
+      statusLabel = 'قيد المعالجة';
+    } else if (status === 'completed') {
+      alertMessage = `تنبيه: مبارك! تم قبول وتفعيل طلبك #${orderId} بنجاح! شكراً لتسوقك من متجر Doo. ✅`;
+      statusLabel = 'مكتمل';
+    } else if (status === 'failed') {
+      alertMessage = `تنبيه: مع الأسف، تم إلغاء طلبك #${orderId} أو رفضه من قبل الإدارة. يرجى مراجعة الدعم لمعرفة السبب أو إعادة المحاولة. ❌`;
+      statusLabel = 'ملغي';
+    } else {
+      alertMessage = `تنبيه: تم إعادة طلبك #${orderId} إلى حالة قيد الانتظار والمراجعة. ⏳`;
+      statusLabel = 'قيد الانتظار';
+    }
+
+    const targetOrder = orders.find((o) => o.id === orderId);
+
     const updated = orders.map((o) => {
       if (o.id === orderId) {
-        return { ...o, status };
+        const currentAlerts = o.alerts || [];
+        const newAlert = {
+          message: alertMessage,
+          timestamp: new Date().toLocaleString('ar-EG', { hour12: true }),
+          isRead: false
+        };
+        
+        const updatedOrder = { 
+          ...o, 
+          status,
+          alerts: [newAlert, ...currentAlerts]
+        };
+
+        // Persist change to Supabase database
+        saveOrder(updatedOrder).catch((err) => {
+          console.error("Failed to save updated order to Supabase:", err);
+        });
+
+        return updatedOrder;
       }
       return o;
     });
-    setOrders(updated);
-    localStorage.setItem('doo_store_orders', JSON.stringify(updated));
-    addToast(`تم تحديث حالة الطلب ${orderId} إلى: ${status === 'completed' ? 'تم التوصيل' : 'تحت المراجعة'}! ⚡`);
+
+    onUpdateOrders(updated);
+    addToast(`تم تحديث حالة الطلب ${orderId} إلى: ${statusLabel}! ⚡`);
+
+    // Trigger customer email notification on completed status
+    if (status === 'completed' && targetOrder) {
+      sendCustomerCompletedEmail(targetOrder);
+    }
   };
 
   const handleDeleteOrder = (orderId: string) => {
@@ -310,16 +485,47 @@ export default function AdminPanel({
 
   const confirmDeleteOrder = (orderId: string) => {
     const updated = orders.filter((o) => o.id !== orderId);
-    setOrders(updated);
-    localStorage.setItem('doo_store_orders', JSON.stringify(updated));
+    onUpdateOrders(updated);
+    deleteOrderFromDb(orderId).catch((err) => {
+      console.error("Failed to delete order from Supabase:", err);
+    });
     addToast(`🗑️ تم حذف الطلب ${orderId} نهائياً بنجاح!`);
     setDeleteConfirmationOrderId(null);
   };
 
-  const [emailLogs, setEmailLogs] = useState<{ id: string; recipient: string; subject: string; body: string; status: string; date: string }[]>([]);
+  const [emailLogs, setEmailLogs] = useState<{ id: string; recipient: string; subject: string; body: string; status: string; date: string; associatedOrder?: any }[]>([]);
   const [customAdminEmail, setCustomAdminEmail] = useState(() => {
     return localStorage.getItem('doo_admin_email') || 'ahmed.amk208@gmail.com';
   });
+
+  const handleDeleteEmailLog = (logId: string) => {
+    const updatedLogs = emailLogs.filter(log => log.id !== logId);
+    setEmailLogs(updatedLogs);
+    localStorage.setItem('doo_sent_emails', JSON.stringify(updatedLogs));
+    addToast('🗑️ تم حذف إشعار التنبيه البريدي بنجاح!');
+  };
+
+  const getOrderForEmailLog = (log: any) => {
+    if (log.associatedOrder) {
+      return log.associatedOrder;
+    }
+    // Extract DOO-XXXXXX from subject or body
+    const match = log.subject.match(/#DOO-(\d+)/) || log.body.match(/DOO-(\d+)/);
+    if (match) {
+      const orderId = `DOO-${match[1]}`;
+      const matchedOrder = orders.find(o => o.id === orderId);
+      if (matchedOrder) {
+        const itemsText = matchedOrder.items.map(item => `${item.product.nameAr} (الكمية: ${item.quantity})`).join('، ');
+        return {
+          id: matchedOrder.id,
+          customerName: matchedOrder.customerName,
+          itemsText: itemsText,
+          total: matchedOrder.total
+        };
+      }
+    }
+    return null;
+  };
 
   useEffect(() => {
     const savedLogs = localStorage.getItem('doo_sent_emails');
@@ -329,7 +535,7 @@ export default function AdminPanel({
   }, [orders]);
 
   // Calculate stats
-  const totalRevenue = orders.reduce((acc, o) => o.status === 'completed' ? acc + o.total : acc, 0);
+  const totalRevenue = orders.reduce((acc, o) => o.status === 'completed' ? acc + (Number(o.total) || 0) : acc, 0);
   const pendingOrdersCount = orders.filter((o) => o.status === 'pending').length;
   const completedOrdersCount = orders.filter((o) => o.status === 'completed').length;
 
@@ -460,9 +666,33 @@ export default function AdminPanel({
                       </td>
                       <td className="p-4">
                         {o.items.map((item, idx) => (
-                          <div key={idx}>
+                          <div key={idx} className="border-b border-white/5 last:border-0 pb-1.5 last:pb-0 mb-1.5 last:mb-0">
                             <p className="font-semibold text-white">{item.product.nameAr}</p>
                             <p className="text-[10px] text-gray-400">الكمية: {item.quantity}</p>
+                            {item.selectedOption && (
+                              <p className="text-[10px] text-discord-purple font-medium">الخيار: {item.selectedOption}</p>
+                            )}
+                            {item.serverLink && (
+                              <p className="text-[10px] text-gray-400 break-all select-all">الرابط: {item.serverLink}</p>
+                            )}
+                            {item.supporterName && (
+                              <p className="text-[10px] text-gray-400">الداعم: {item.supporterName}</p>
+                            )}
+                            {item.customImage && (
+                              <div className="mt-1.5 flex items-center gap-1.5">
+                                <span className="text-[10px] text-discord-green font-semibold">صورة الطلب:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setViewerImageTitle('عرض صورة الطلب المرفقة 🖼️');
+                                    setSelectedReceiptUrl(item.customImage || null);
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-discord-green/10 hover:bg-discord-green text-discord-green hover:text-white transition-all cursor-pointer text-[9px] font-bold"
+                                >
+                                  فتح الصورة 🔍
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </td>
@@ -480,54 +710,43 @@ export default function AdminPanel({
                         )}
                       </td>
                       <td className="p-4">
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                          o.status === 'completed'
-                            ? 'bg-discord-green/10 text-discord-green border border-discord-green/20'
-                            : o.status === 'pending'
-                            ? 'bg-discord-yellow/10 text-discord-yellow border border-discord-yellow/20 animate-pulse'
-                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
-                        }`}>
-                          {o.status === 'completed' ? 'مكتمل ومفعل ✅' : 'قيد الانتظار ⏳'}
-                        </span>
+                        <select
+                          value={o.status}
+                          onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value as Order['status'])}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold bg-discord-dark border outline-none cursor-pointer transition-all ${
+                            o.status === 'completed'
+                              ? 'text-discord-green border-discord-green/35'
+                              : o.status === 'processing'
+                              ? 'text-blue-400 border-blue-500/35'
+                              : o.status === 'pending'
+                              ? 'text-discord-yellow border-discord-yellow/35'
+                              : 'text-red-400 border-red-500/35'
+                          }`}
+                        >
+                          <option value="pending" className="bg-discord-dark text-white font-bold">قيد الانتظار ⏳</option>
+                          <option value="processing" className="bg-discord-dark text-white font-bold">قيد المعالجة ⚙️</option>
+                          <option value="completed" className="bg-discord-dark text-white font-bold">مكتمل ✅</option>
+                          <option value="failed" className="bg-discord-dark text-white font-bold">ملغي ❌</option>
+                        </select>
                       </td>
                       <td className="p-4 text-left">
                         <div className="flex gap-2 justify-end items-center">
-                          {o.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  handleUpdateOrderStatus(o.id, 'completed');
-                                  addToast(`🎉 تم قبول وتفعيل الطلب رقم ${o.id} بنجاح!`);
-                                }}
-                                className="px-2.5 py-1 bg-discord-green/20 hover:bg-discord-green text-discord-green hover:text-white rounded text-[10px] font-bold cursor-pointer transition-all"
-                              >
-                                قبول ✅
-                              </button>
-                              <button
-                                onClick={() => {
-                                  handleUpdateOrderStatus(o.id, 'failed');
-                                  addToast(`❌ تم رفض وإلغاء الطلب رقم ${o.id}.`);
-                                }}
-                                className="px-2.5 py-1 bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white rounded text-[10px] font-bold cursor-pointer transition-all"
-                              >
-                                رفض ❌
-                              </button>
-                            </>
-                          )}
-                          {o.status === 'completed' && (
-                            <span className="text-[10px] bg-discord-green/10 text-discord-green border border-discord-green/20 px-2 py-0.5 rounded font-bold">مقبول ومفعل ✅</span>
-                          )}
-                          {o.status === 'failed' && (
-                            <span className="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded font-bold">مرفوض/ملغي ❌</span>
-                          )}
+                          <button
+                            onClick={() => setSelectedReceiptOrder(o)}
+                            className="px-2 py-1 bg-discord-purple/20 hover:bg-discord-purple text-discord-purple hover:text-white rounded text-[10px] font-bold cursor-pointer transition-all"
+                            title="عرض وطباعة فاتورة الطلب"
+                          >
+                            فاتورة 🧾
+                          </button>
                           
                           {o.paymentDetails?.receiptUrl && (
                             <button
                               onClick={() => {
+                                setViewerImageTitle('عرض إيصال السداد المرفق 📄');
                                 setSelectedReceiptUrl(o.paymentDetails?.receiptUrl || null);
                               }}
-                              className="p-1 rounded bg-discord-purple/20 hover:bg-discord-purple text-discord-purple hover:text-white transition-colors cursor-pointer text-[10px] font-semibold"
-                              title="عرض إيصال التحويل"
+                              className="px-2 py-1 rounded bg-discord-purple/10 hover:bg-discord-purple/30 text-discord-fuchsia hover:text-white transition-all cursor-pointer text-[10px] font-semibold"
+                              title="عرض صورة إيصال السداد"
                             >
                               عرض الإيصال 📄
                             </button>
@@ -763,15 +982,27 @@ export default function AdminPanel({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-gray-300 font-bold block">رابط الصورة (URL):</label>
-                  <input
-                    type="text"
-                    value={newProdImage}
-                    onChange={(e) => setNewProdImage(e.target.value)}
-                    placeholder="مثال: https://images.com/username.png"
-                    className="w-full bg-discord-dark border border-white/10 rounded-lg py-2.5 px-3 text-white outline-none focus:border-discord-purple font-mono"
-                    dir="ltr"
-                  />
+                  <label className="text-gray-300 font-bold block">رابط الصورة (URL) أو الرفع لـ Supabase:</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newProdImage}
+                      onChange={(e) => setNewProdImage(e.target.value)}
+                      placeholder="مثال: https://images.com/username.png"
+                      className="flex-grow bg-discord-dark border border-white/10 rounded-lg py-2.5 px-3 text-white outline-none focus:border-discord-purple font-mono"
+                      dir="ltr"
+                    />
+                    <label className="px-3 py-2.5 bg-discord-purple hover:bg-[#4752c4] text-white text-xs font-bold rounded-lg cursor-pointer flex items-center justify-center gap-1 shrink-0 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleNewProductImageUpload}
+                        className="hidden"
+                        disabled={isUploading}
+                      />
+                      <span>{isUploading ? 'جاري الرفع...' : 'رفع ملف 📁'}</span>
+                    </label>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-gray-300 font-bold block">مزايا وفوائد المنتج (كل ميزة في سطر منفصل):</label>
@@ -882,15 +1113,27 @@ export default function AdminPanel({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-gray-400 block">رابط صورة المنتج (URL):</label>
-                      <input
-                        type="text"
-                        value={p.image || ''}
-                        onChange={(e) => onUpdateProductImage(p.id, e.target.value)}
-                        placeholder="مثال: https://images.com/nitro.png"
-                        className="w-full bg-discord-dark border border-white/10 rounded-lg py-2 px-3 text-left text-white outline-none focus:border-discord-purple font-mono text-[11px]"
-                        dir="ltr"
-                      />
+                      <label className="text-gray-400 block">رابط صورة المنتج (URL) أو الرفع لـ Supabase:</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={p.image || ''}
+                          onChange={(e) => onUpdateProductImage(p.id, e.target.value)}
+                          placeholder="مثال: https://images.com/nitro.png"
+                          className="flex-grow bg-discord-dark border border-white/10 rounded-lg py-2 px-3 text-left text-white outline-none focus:border-discord-purple font-mono text-[11px]"
+                          dir="ltr"
+                        />
+                        <label className="px-3 py-2 bg-discord-purple hover:bg-[#4752c4] text-white text-[10px] font-black rounded-lg cursor-pointer flex items-center justify-center gap-1 shrink-0 transition-colors">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleEditProductImageUpload(p.id, e)}
+                            className="hidden"
+                            disabled={uploadingProductId === p.id}
+                          />
+                          <span>{uploadingProductId === p.id ? 'جاري الرفع...' : 'رفع ملف 📁'}</span>
+                        </label>
+                      </div>
                     </div>
 
                     <div className="space-y-1">
@@ -1152,6 +1395,108 @@ export default function AdminPanel({
             </div>
           </div>
 
+          {/* Configure Customer Email Card */}
+          <div className="p-6 rounded-2xl bg-[#1e1f22]/90 border border-discord-purple/30 space-y-5 shadow-2xl">
+            <h3 className="font-extrabold text-white text-base">⚙️ إعدادات تنبيهات العملاء التلقائية عند اكتمال الطلب</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              قم بتفعيل وتهيئة الخدمة التي تقوم تلقائياً بمراسلة العميل بالبريد الإلكتروني فور تحول حالة طلبه إلى <span className="text-discord-green font-bold bg-discord-green/10 px-1.5 py-0.5 rounded">مكتمل ✅</span>. يمكنك استخدام نظام المحاكاة للتجربة أو ربط حسابك الفعلي في <strong>EmailJS</strong> أو <strong>Supabase Edge Functions</strong>.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-gray-300 font-bold block">طريقة الإرسال المعتمدة:</label>
+                <select
+                  value={emailMethod}
+                  onChange={(e) => {
+                    const val = e.target.value as any;
+                    setEmailMethod(val);
+                    localStorage.setItem('doo_email_method', val);
+                    addToast(`🔄 تم تغيير نظام الإرسال إلى: ${val === 'simulation' ? 'نظام محاكاة داخلي' : val === 'emailjs' ? 'مكتبة EmailJS' : 'Supabase Edge Function'}`);
+                  }}
+                  className="w-full bg-discord-dark border border-white/10 rounded-lg py-2.5 px-3 text-white outline-none focus:border-discord-purple cursor-pointer"
+                >
+                  <option value="simulation">نظام محاكاة داخلي (سجل محلي فقط) 🪵</option>
+                  <option value="emailjs">مكتبة EmailJS الفعالة 📧</option>
+                  <option value="supabase_edge">Supabase Edge Function ⚡</option>
+                </select>
+              </div>
+            </div>
+
+            {emailMethod === 'emailjs' && (
+              <div className="p-4 rounded-xl bg-black/20 border border-white/5 space-y-4">
+                <p className="text-[11px] text-discord-purple font-semibold">🔗 تطلب تهيئة قالب EmailJS بالمتغيرات التالية لتعمل تلقائياً: customer_name, customer_email, order_id, total_amount, items, discord_username, message_body</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 font-bold block">Service ID:</label>
+                    <input
+                      type="text"
+                      value={emailjsServiceId}
+                      onChange={(e) => setEmailjsServiceId(e.target.value)}
+                      placeholder="مثال: service_xxxxxx"
+                      className="w-full bg-discord-dark border border-white/10 rounded-lg py-2.5 px-3 text-white outline-none focus:border-discord-purple font-mono"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 font-bold block">Template ID:</label>
+                    <input
+                      type="text"
+                      value={emailjsTemplateId}
+                      onChange={(e) => setEmailjsTemplateId(e.target.value)}
+                      placeholder="مثال: template_xxxxxx"
+                      className="w-full bg-discord-dark border border-white/10 rounded-lg py-2.5 px-3 text-white outline-none focus:border-discord-purple font-mono"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 font-bold block">Public Key (User ID):</label>
+                    <input
+                      type="text"
+                      value={emailjsPublicKey}
+                      onChange={(e) => setEmailjsPublicKey(e.target.value)}
+                      placeholder="مثال: user_xxxxxxxx"
+                      className="w-full bg-discord-dark border border-white/10 rounded-lg py-2.5 px-3 text-white outline-none focus:border-discord-purple font-mono"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {emailMethod === 'supabase_edge' && (
+              <div className="p-4 rounded-xl bg-black/20 border border-white/5 space-y-3">
+                <p className="text-[11px] text-discord-purple font-semibold">⚡ سيقوم النظام بإرسال طلب POST بصيغة JSON تحتوي على تفاصيل الطلب كاملة إلى الرابط المباشر المدخل أدناه.</p>
+                <div className="space-y-1.5 text-xs max-w-xl">
+                  <label className="text-gray-300 font-bold block">رابط Edge Function URL:</label>
+                  <input
+                    type="url"
+                    value={supabaseEdgeUrl}
+                    onChange={(e) => setSupabaseEdgeUrl(e.target.value)}
+                    placeholder="https://xxxx.supabase.co/functions/v1/send-email"
+                    className="w-full bg-discord-dark border border-white/10 rounded-lg py-2.5 px-3 text-white outline-none focus:border-discord-purple font-mono text-left"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => {
+                  localStorage.setItem('doo_email_method', emailMethod);
+                  localStorage.setItem('doo_emailjs_service_id', emailjsServiceId.trim());
+                  localStorage.setItem('doo_emailjs_template_id', emailjsTemplateId.trim());
+                  localStorage.setItem('doo_emailjs_public_key', emailjsPublicKey.trim());
+                  localStorage.setItem('doo_supabase_edge_url', supabaseEdgeUrl.trim());
+                  addToast('🔒 تم حفظ إعدادات تنبيهات البريد للعملاء بنجاح!');
+                }}
+                className="px-6 py-2.5 bg-discord-purple hover:bg-[#4752c4] text-white text-xs font-black rounded-xl cursor-pointer transition-all shadow-lg"
+              >
+                حفظ إعدادات مراسلة العملاء 💾
+              </button>
+            </div>
+          </div>
+
           {/* Email Logs List */}
           <div className="p-6 rounded-2xl bg-discord-dark border border-white/10 space-y-4">
             <h3 className="font-extrabold text-white text-base">سجل التنبيهات البريدية الآلية الصادرة للمدير</h3>
@@ -1398,7 +1743,7 @@ export default function AdminPanel({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-opacity">
           <div className="relative bg-discord-dark border border-white/10 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl p-6 text-right space-y-6">
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
-              <h3 className="font-extrabold text-white text-sm">عرض إيصال السداد المرفق 📄</h3>
+              <h3 className="font-extrabold text-white text-sm">{viewerImageTitle}</h3>
               <button
                 onClick={() => setSelectedReceiptUrl(null)}
                 className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all cursor-pointer"
@@ -1407,30 +1752,88 @@ export default function AdminPanel({
               </button>
             </div>
             
-            <div className="aspect-auto max-h-[60vh] overflow-y-auto rounded-xl bg-discord-black p-2 flex items-center justify-center border border-white/5">
-              {selectedReceiptUrl.startsWith('data:image') || selectedReceiptUrl.includes('http') || selectedReceiptUrl.includes('/') ? (
-                <img
-                  src={selectedReceiptUrl}
-                  alt="Receipt"
-                  className="max-w-full h-auto rounded-lg object-contain"
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    (e.target as any).style.display = 'none';
-                    const parent = (e.target as any).parentElement;
-                    if (parent) {
-                      const msg = document.createElement('p');
-                      msg.className = 'text-xs text-gray-400 p-6 text-center leading-relaxed';
-                      msg.innerText = 'هذا الإيصال عبارة عن بيانات نصية أو لم يتمكن المتصفح من تحميل الصورة مباشرة.';
-                      parent.appendChild(msg);
-                    }
-                  }}
-                />
-              ) : (
-                <div className="p-6 text-center space-y-3">
-                  <p className="text-xs text-gray-400 leading-relaxed">تفاصيل مرجع أو محتوى الإيصال:</p>
-                  <pre className="p-3 bg-discord-black/50 text-discord-green font-mono text-xs rounded-lg select-all border border-discord-green/20 break-all whitespace-pre-wrap">{selectedReceiptUrl}</pre>
-                </div>
-              )}
+            <div className="aspect-auto max-h-[60vh] overflow-y-auto rounded-xl bg-discord-black p-2 flex flex-col items-center justify-center border border-white/5">
+              {(() => {
+                let isImage = false;
+                let displayUrl = selectedReceiptUrl;
+                
+                const hasBase64 = selectedReceiptUrl.includes('base64');
+                const hasHttp = selectedReceiptUrl.includes('http');
+                const hasSlash = selectedReceiptUrl.includes('/');
+                const isLikelyImageExtension = /\.(jpg|jpeg|png|gif|webp|svg|bmp)/i.test(selectedReceiptUrl);
+
+                if (hasBase64 || hasHttp || hasSlash || isLikelyImageExtension) {
+                  isImage = true;
+                }
+
+                if (hasBase64 && !selectedReceiptUrl.startsWith('data:image/')) {
+                  const parts = selectedReceiptUrl.split('base64,');
+                  if (parts.length > 1) {
+                    displayUrl = `data:image/jpeg;base64,${parts[1]}`;
+                  } else if (selectedReceiptUrl.startsWith('data:')) {
+                    displayUrl = selectedReceiptUrl.replace(/data:[^;]+;base64,/, 'data:image/jpeg;base64,');
+                  } else {
+                    displayUrl = `data:image/jpeg;base64,${selectedReceiptUrl}`;
+                  }
+                }
+
+                if (isImage) {
+                  return (
+                    <div className="w-full flex flex-col items-center gap-3">
+                      <img
+                        src={displayUrl}
+                        alt="Receipt"
+                        className="max-w-full h-auto rounded-lg object-contain"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          // Try one fallback to ensure standard image MIME type
+                          if (displayUrl.startsWith('data:image/') && !displayUrl.includes('jpeg')) {
+                            const parts = displayUrl.split('base64,');
+                            if (parts.length > 1) {
+                              (e.target as HTMLImageElement).src = `data:image/jpeg;base64,${parts[1]}`;
+                              return;
+                            }
+                          }
+                          (e.target as any).style.display = 'none';
+                          const parent = (e.target as any).parentElement;
+                          if (parent) {
+                            const msg = document.createElement('p');
+                            msg.className = 'text-xs text-gray-400 p-6 text-center leading-relaxed';
+                            msg.innerText = '⚠️ لم يتمكن المتصفح من عرض الصورة مباشرة. قد يكون الملف تالفاً أو صيغته غير مدعومة بالمتصفح.';
+                            parent.appendChild(msg);
+                          }
+                        }}
+                      />
+                      <div className="flex gap-2">
+                        <a
+                          href={displayUrl}
+                          download="receipt-image.jpg"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-discord-purple/20 hover:bg-discord-purple text-discord-purple hover:text-white rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          📥 تحميل الصورة كاملة
+                        </a>
+                        <a
+                          href={displayUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          🌐 فتح في نافذة مستقلة
+                        </a>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="p-6 text-center space-y-3 w-full">
+                    <p className="text-xs text-gray-400 leading-relaxed">تفاصيل مرجع أو محتوى الإيصال:</p>
+                    <pre className="p-3 bg-discord-black/50 text-discord-green font-mono text-xs rounded-lg select-all border border-discord-green/20 break-all whitespace-pre-wrap">{selectedReceiptUrl}</pre>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex justify-end pt-2">
@@ -1519,6 +1922,13 @@ export default function AdminPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {selectedReceiptOrder && (
+        <OrderReceipt
+          order={selectedReceiptOrder}
+          onClose={() => setSelectedReceiptOrder(null)}
+        />
       )}
 
     </div>

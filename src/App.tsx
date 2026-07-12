@@ -36,6 +36,10 @@ import ReviewsSection from './components/ReviewsSection';
 import LiveChat from './components/LiveChat';
 import AdminPanel from './components/AdminPanel';
 import UserProfile from './components/UserProfile';
+import OrderReceipt from './components/OrderReceipt';
+
+// Import Supabase helpers
+import { getProducts, createProductInDb, updateProductInDb, deleteProductFromDb, getOrders, saveOrder, updateOrderInDb } from './lib/supabase';
 
 // Types and static data
 import { Product, CartItem, Order } from './types';
@@ -45,9 +49,13 @@ export default function App() {
   const [currentView, setCurrentView] = useState<string>('home');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [myOrdersQuery, setMyOrdersQuery] = useState<string>('');
+  const [trackingTab, setTrackingTab] = useState<'general' | 'direct_id'>('direct_id');
+  const [directOrderIdQuery, setDirectOrderIdQuery] = useState<string>('');
+  const [viewingReceiptOrder, setViewingReceiptOrder] = useState<Order | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
   const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState<string>('');
@@ -57,44 +65,58 @@ export default function App() {
   const [adminEmail, setAdminEmail] = useState<string>(() => {
     return localStorage.getItem('doo_admin_email') || 'ahmed.amk208@gmail.com';
   });
-const [categoryNames, setCategoryNames] = useState({
-  nitro: 'Nitro 1 month',
-  boosts: 'Discord Server Boost',
-  effects: 'Effects',
-  users_premium: 'users',
-  creations_custom: 'Custom Creationns',
-  old_accounts: 'old accounts',
-});
+  const [categoryNames, setCategoryNames] = useState({
+    nitro: 'ديسكورد نيترو',
+    boosts: 'بوستات السيرفر',
+    effects: 'تأثيرات الملف الشخصي',
+    users_premium: 'يوزرات مميزة',
+    creations_custom: 'إنشاءات',
+    old_accounts: 'Old acc',
+  });
+  
+  // Custom Toasts state
+  const [toasts, setToasts] = useState<{ id: string; text: string }[]>([]);
 
-// Custom Toasts state
-const [toasts, setToasts] = useState<{ id: string; text: string }[]>([]);
+  // Simulated live purchases to create social proof
+  const [liveNotification, setLiveNotification] = useState<{ name: string; action: string; time: string } | null>(null);
 
-// Simulated live purchases to create social proof
-const [liveNotification, setLiveNotification] = useState<{
-  name: string;
-  action: string;
-  time: string;
-} | null>(null);
+  // Load cart, categories and products on mount
+  useEffect(() => {
+    const savedCart = localStorage.getItem('doo_store_cart');
+    if (savedCart) {
+      setCartItems(JSON.parse(savedCart));
+    }
+    const savedNames = localStorage.getItem('doo_store_category_names');
+    if (savedNames) {
+      setCategoryNames(JSON.parse(savedNames));
+    }
 
-// Load cart, categories and products on mount
-useEffect(() => {
-  const savedCart = localStorage.getItem('doo_store_cart');
-  if (savedCart) {
-    setCartItems(JSON.parse(savedCart));
-  }
+    // Load products and orders from Supabase backend (with LocalStorage automatic fallback)
+    async function fetchBackendData() {
+      try {
+        const loadedProducts = await getProducts();
+        setProducts(loadedProducts);
+      } catch (err) {
+        console.error('Failed to load products from Supabase startup:', err);
+      }
 
-  const savedNames = localStorage.getItem('doo_store_category_names');
-  if (savedNames) {
-    setCategoryNames(JSON.parse(savedNames));
-  }
+      try {
+        const loadedOrders = await getOrders();
+        setOrders(loadedOrders);
+      } catch (err) {
+        console.error('Failed to load orders from Supabase startup:', err);
+      }
+    }
+    fetchBackendData();
+  }, []);
 
-  // استخدم المنتجات الموجودة في data.ts دائماً
-  setProducts(PRODUCTS);
-  localStorage.setItem('doo_store_products', JSON.stringify(PRODUCTS));
-}, []);
   const handleUpdateCategoryNames = (names: { nitro: string; boosts: string; effects: string; users_premium?: string; creations_custom?: string; old_accounts?: string }) => {
     setCategoryNames(names as any);
     localStorage.setItem('doo_store_category_names', JSON.stringify(names));
+  };
+
+  const handleUpdateOrders = (newOrders: Order[]) => {
+    setOrders(newOrders);
   };
 
   // Save cart changes
@@ -189,6 +211,20 @@ useEffect(() => {
 
         localStorage.setItem('doo_sent_emails', JSON.stringify([newEmailLog, ...currentEmails]));
         
+        // Reload orders state to capture the newly created order instantly from Supabase
+        getOrders().then((loadedOrders) => {
+          setOrders(loadedOrders);
+        }).catch((err) => {
+          console.error("Failed to load orders after placement:", err);
+          // Fallback to prepending if fetching fails
+          setOrders((prev) => {
+            if (!prev.some((o) => o.id === order.id)) {
+              return [order, ...prev];
+            }
+            return prev;
+          });
+        });
+
         // Show a beautiful toast confirming email alert dispatch
         addToast(`📧 تم إرسال تنبيه بريد آلي للمدير (${currentAdminEmail}) بنجاح لتسريع التفعيل!`);
       }
@@ -203,14 +239,16 @@ useEffect(() => {
     quantity: number,
     selectedOption?: string,
     serverLink?: string,
-    supporterName?: string
+    supporterName?: string,
+    customImage?: string
   ) => {
     const existingIndex = cartItems.findIndex(
       (item) =>
         item.product.id === product.id &&
         item.selectedOption === selectedOption &&
         item.serverLink === serverLink &&
-        item.supporterName === supporterName
+        item.supporterName === supporterName &&
+        item.customImage === customImage
     );
 
     let updated: CartItem[];
@@ -220,7 +258,7 @@ useEffect(() => {
     } else {
       updated = [
         ...cartItems,
-        { product, quantity, selectedOption, serverLink, supporterName },
+        { product, quantity, selectedOption, serverLink, supporterName, customImage },
       ];
     }
     saveCart(updated);
@@ -260,19 +298,19 @@ useEffect(() => {
   };
 
   // Admin adjustments
-  const handleCreateProduct = (p: Product) => {
+  const handleCreateProduct = async (p: Product) => {
     const updated = [...products, p];
     setProducts(updated);
-    localStorage.setItem('doo_store_products', JSON.stringify(updated));
+    await createProductInDb(p);
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     const updated = products.filter((p) => p.id !== id);
     setProducts(updated);
-    localStorage.setItem('doo_store_products', JSON.stringify(updated));
+    await deleteProductFromDb(id);
   };
 
-  const handleUpdateProduct = (id: string, updatedFields: Partial<Product>) => {
+  const handleUpdateProduct = async (id: string, updatedFields: Partial<Product>) => {
     const updated = products.map((p) => {
       if (p.id === id) {
         return { ...p, ...updatedFields };
@@ -280,18 +318,11 @@ useEffect(() => {
       return p;
     });
     setProducts(updated);
-    localStorage.setItem('doo_store_products', JSON.stringify(updated));
+    await updateProductInDb(id, updatedFields);
   };
 
   const handlePurchaseProduct = (id: string) => {
-    const updated = products.map((p) => {
-      if (p.id === id) {
-        return { ...p, stock: 0 };
-      }
-      return p;
-    });
-    setProducts(updated);
-    localStorage.setItem('doo_store_products', JSON.stringify(updated));
+    handleUpdateProduct(id, { stock: 0 });
   };
 
   const handleUpdateProductPrice = (id: string, price: number) => {
@@ -375,6 +406,8 @@ useEffect(() => {
         {isAdminMode ? (
           <AdminPanel
             products={products}
+            orders={orders}
+            onUpdateOrders={handleUpdateOrders}
             onUpdateProductPrice={handleUpdateProductPrice}
             onUpdateProductStock={handleUpdateProductStock}
             onUpdateProductImage={handleUpdateProductImage}
@@ -753,6 +786,34 @@ useEffect(() => {
                         </div>
                       </div>
                     </motion.div>
+
+                    {/* Category 6: Old Accounts */}
+                    <motion.div
+                      onClick={() => handleNavigate('old_accounts')}
+                      className="group cursor-pointer rounded-3xl bg-discord-darker/60 border border-white/5 hover:border-discord-purple/40 overflow-hidden shadow-xl transition-all relative flex flex-col justify-between"
+                      whileHover={{ y: -8 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <div className="relative aspect-video overflow-hidden bg-discord-black">
+                        <div className="absolute inset-0 bg-gradient-to-t from-discord-black via-transparent to-transparent z-10"></div>
+                        <img
+                          src={products.find(p => p.category === 'old_accounts')?.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80'}
+                          alt={categoryNames.old_accounts}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                      <div className="p-6 space-y-4 relative z-20 text-right">
+                        <div className="space-y-1">
+                          <h3 className="text-xl font-black text-white group-hover:text-discord-purple transition-colors">{categoryNames.old_accounts}</h3>
+                          <p className="text-xs text-gray-400 leading-relaxed">امتلك حسابات ديسكورد قديمة من سنوات 2015-2020 بضمان كامل.</p>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                          <span className="text-[11px] text-discord-purple font-black">تصفح المنتجات ←</span>
+                          <span className="text-xs font-bold text-gray-500">تسليم فوري ومضمون ⚡</span>
+                        </div>
+                      </div>
+                    </motion.div>
                   </div>
                 </section>
               </motion.div>
@@ -1041,7 +1102,7 @@ useEffect(() => {
                             <div className="absolute top-2 right-2 bg-discord-purple text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow">شعبية فائقة 🔥</div>
                           </div>
                           <div className="space-y-2">
-                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold text-discord-fuchsia bg-discord-fuchsia/10 rounded">old accounts</span>
+                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold text-discord-fuchsia bg-discord-fuchsia/10 rounded">حسابات قديمة ⏱️</span>
                             <h3 className="font-extrabold text-base text-white">{cProd.nameAr}</h3>
                             <p className="text-xs text-gray-400 leading-relaxed line-clamp-3">{cProd.descriptionAr}</p>
                           </div>
@@ -1074,153 +1135,341 @@ useEffect(() => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="py-12 max-w-2xl mx-auto px-4 space-y-12 text-right font-sans"
+                className="py-12 max-w-2xl mx-auto px-4 space-y-10 text-right font-sans"
               >
                 <div className="text-center space-y-2">
                   <div className="inline-flex w-12 h-12 rounded-full bg-discord-purple/10 border border-discord-purple/20 items-center justify-center text-discord-purple mb-2">
                     <ShoppingCart className="w-6 h-6 animate-bounce text-discord-purple" />
                   </div>
                   <h1 className="text-3xl font-black text-white font-display">تتبع حالة طلباتك 📦</h1>
-                  <p className="text-xs text-gray-400">تحقق فوراً من حالة طلبك (سواء كان قيد المراجعة، قيد التنفيذ، أو تم توصيله وتفعيله).</p>
+                  <p className="text-xs text-gray-400">تابع تحديثات وإشعارات طلباتك لحظة بلحظة واستخرج فواتير الدفع المعتمدة.</p>
                 </div>
 
-                {/* Search Bar lookup */}
-                <div className="p-6 rounded-3xl bg-discord-dark border border-white/5 space-y-4 shadow-xl">
-                  <h3 className="font-bold text-sm text-white">ابحث عن طلباتك بالمتجر:</h3>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="text"
-                      placeholder="أدخل بريدك الإلكتروني، حساب ديسكورد، أو رقم الطلب (DOO-...)"
-                      value={myOrdersQuery}
-                      onChange={(e) => setMyOrdersQuery(e.target.value)}
-                      className="flex-grow bg-discord-black border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-gray-500 outline-none focus:border-discord-purple text-right font-medium"
-                    />
-                  </div>
-                  <p className="text-[10px] text-gray-500">تلميح: سيتم فلترة وعرض كافة طلباتك تلقائياً وبشكل فوري بمجرد كتابة بريدك أو يوزرك.</p>
+                {/* Tracking Method Tabs */}
+                <div className="flex bg-[#1e1f22] p-1 rounded-2xl border border-white/5">
+                  <button
+                    onClick={() => setTrackingTab('direct_id')}
+                    className={`flex-1 py-3 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                      trackingTab === 'direct_id'
+                        ? 'bg-discord-purple text-white shadow-lg'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    تتبع فوري برقم الطلب ⚡
+                  </button>
+                  <button
+                    onClick={() => setTrackingTab('general')}
+                    className={`flex-1 py-3 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                      trackingTab === 'general'
+                        ? 'bg-discord-purple text-white shadow-lg'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    البحث العام بالبريد أو ديسكورد 🔍
+                  </button>
                 </div>
 
-                {/* Search Results Display */}
-                <div className="space-y-4">
-                  {(() => {
-                    const savedOrdersStr = localStorage.getItem('doo_store_orders');
-                    if (!savedOrdersStr) {
-                      return (
-                        <div className="text-center py-10 bg-discord-dark/20 border border-white/5 rounded-2xl">
-                          <p className="text-xs text-gray-400">لا يوجد أي طلبات مسجلة في المتجر حالياً.</p>
-                        </div>
-                      );
-                    }
+                {/* Tab Content */}
+                {trackingTab === 'direct_id' ? (
+                  <div className="space-y-6">
+                    <div className="p-6 rounded-3xl bg-discord-dark border border-white/5 space-y-4 shadow-xl">
+                      <h3 className="font-bold text-sm text-white">أدخل رقم طلبك للتتبع الفوري والمباشر:</h3>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="مثال: DOO-12345"
+                          value={directOrderIdQuery}
+                          onChange={(e) => setDirectOrderIdQuery(e.target.value)}
+                          className="flex-grow bg-discord-black border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-gray-500 outline-none focus:border-discord-purple text-center font-bold font-mono"
+                          dir="ltr"
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-400 leading-relaxed">
+                        * يرجى إدخال كود الطلب بالكامل للحصول على التفاصيل اللحظية، وتنبيهات المدير الخاصة بطلبك وتاريخ التسليم.
+                      </p>
+                    </div>
 
-                    const allOrders = JSON.parse(savedOrdersStr) as Order[];
-                    const query = myOrdersQuery.trim().toLowerCase();
+                    {/* Direct Tracking Result */}
+                    {(() => {
+                      if (!directOrderIdQuery.trim()) return null;
+                      const targetOrder = orders.find(o => o.id.trim().toUpperCase() === directOrderIdQuery.trim().toUpperCase());
 
-                    // If query is empty, try to pre-populate with current logged-in user details if any
-                    let filtered = allOrders;
-                    let showInfoMsg = false;
-
-                    if (query) {
-                      filtered = allOrders.filter(o => 
-                        o.id.toLowerCase().includes(query) ||
-                        (o.email || '').toLowerCase().includes(query) ||
-                        (o.discordUsername || '').toLowerCase().includes(query) ||
-                        (o.customerName || '').toLowerCase().includes(query)
-                      );
-                    } else {
-                      // Try to autoload from current logged-in user
-                      const savedUserStr = localStorage.getItem('doo_current_user');
-                      if (savedUserStr) {
-                        const user = JSON.parse(savedUserStr);
-                        const userEmail = (user.email || '').toLowerCase();
-                        const userDiscord = (user.discordId || '').toLowerCase();
-                        const userName = (user.username || '').toLowerCase();
-                        filtered = allOrders.filter(o => 
-                          (o.email && o.email.toLowerCase() === userEmail) ||
-                          (o.discordUsername && o.discordUsername.toLowerCase() === userDiscord) ||
-                          (o.customerName && o.customerName.toLowerCase() === userName)
-                        );
-                        showInfoMsg = true;
-                      } else {
-                        filtered = [];
-                      }
-                    }
-
-                    if (filtered.length === 0) {
-                      return (
-                        <div className="text-center py-12 bg-discord-dark/20 border border-white/5 rounded-2xl space-y-3">
-                          <ShoppingCart className="w-10 h-10 text-gray-600 mx-auto animate-pulse" />
-                          <h4 className="font-bold text-gray-400 text-sm">لم نجد أي طلبات مطابقة!</h4>
-                          <p className="text-[11px] text-gray-500 max-w-xs mx-auto leading-relaxed">
-                            {query ? 'تأكد من إدخال بريدك الإلكتروني أو حساب ديسكورد بشكل صحيح كما كتبته في نموذج الدفع.' : 'اكتب بريدك أو حساب ديسكورد بالبحث في الأعلى للاستعلام الفوري.'}
-                          </p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-4">
-                        {showInfoMsg && (
-                          <div className="p-3 bg-discord-purple/10 border border-discord-purple/20 text-discord-purple rounded-xl text-xs font-semibold text-center">
-                            👤 تم تحميل الطلبات المرتبطة بحسابك الحالي تلقائياً.
+                      if (!targetOrder) {
+                        return (
+                          <div className="text-center py-12 bg-red-500/5 border border-red-500/20 rounded-2xl space-y-2">
+                            <AlertCircle className="w-8 h-8 text-red-500 mx-auto animate-pulse" />
+                            <h4 className="font-bold text-red-400 text-sm">عذراً، لم نجد طلب بهذا الرقم!</h4>
+                            <p className="text-[11px] text-gray-500 max-w-sm mx-auto leading-relaxed">
+                              تأكد من كتابة رمز الطلب بشكل صحيح ومطابق تماماً للرمز الذي ظهر لك بعد الدفع (مثال: DOO-XXXXX).
+                            </p>
                           </div>
-                        )}
-                        <h3 className="font-extrabold text-sm text-white">الطلبات التي تم العثور عليها ({filtered.length}):</h3>
-                        <div className="space-y-4">
-                          {filtered.map((order) => (
-                            <div 
-                              key={order.id} 
-                              className="bg-discord-dark border border-white/5 hover:border-white/10 p-5 rounded-2xl text-right space-y-4 transition-all"
-                            >
-                              <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-3">
-                                <div className="space-y-1">
-                                  <span className="text-xs font-black text-white font-mono">{order.id}</span>
-                                  <span className="text-[10px] text-gray-500 block">{order.date}</span>
-                                </div>
-                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
-                                  order.status === 'completed' 
-                                    ? 'bg-discord-green/10 text-discord-green border border-discord-green/20' 
-                                    : order.status === 'pending'
-                                      ? 'bg-discord-yellow/10 text-discord-yellow border border-discord-yellow/20'
-                                      : order.status === 'processing'
-                                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                        : 'bg-red-500/10 text-red-500 border border-red-500/20'
-                                }`}>
-                                  {order.status === 'completed' && 'تم التفعيل والتسليم بنجاح ✅'}
-                                  {order.status === 'pending' && 'قيد الانتظار للتحقق والمراجعة ⏳'}
-                                  {order.status === 'processing' && 'جاري العمل والتنفيذ حالياً ⚙️'}
-                                  {order.status === 'failed' && 'مرفوض أو ملغي ❌'}
-                                </span>
+                        );
+                      }
+
+                      return (
+                        <div className="bg-discord-dark border border-white/10 p-6 rounded-3xl space-y-6 shadow-2xl relative overflow-hidden">
+                          {/* Stepper Wizard Flow */}
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                              <span className="text-xs font-black text-gray-400">تحديث حالة الطلب اللحظي:</span>
+                              <span className={`px-3 py-1 rounded-full text-xs font-black ${
+                                targetOrder.status === 'completed'
+                                  ? 'bg-discord-green/20 text-discord-green border border-discord-green/30'
+                                  : targetOrder.status === 'processing'
+                                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                  : targetOrder.status === 'pending'
+                                  ? 'bg-discord-yellow/20 text-discord-yellow border border-discord-yellow/30 animate-pulse'
+                                  : 'bg-red-500/20 text-red-500 border border-red-500/30'
+                              }`}>
+                                {targetOrder.status === 'completed' && 'مكتمل ومفعل بنجاح ✅'}
+                                {targetOrder.status === 'processing' && 'جاري العمل والتجهيز ⚙️'}
+                                {targetOrder.status === 'pending' && 'قيد الانتظار للمراجعة ⏳'}
+                                {targetOrder.status === 'failed' && 'ملغي أو مرفوض ❌'}
+                              </span>
+                            </div>
+
+                            {/* Custom Responsive Progress Steps */}
+                            <div className="grid grid-cols-4 gap-2 text-center pt-2 relative">
+                              <div className="space-y-2">
+                                <div className="w-8 h-8 rounded-full bg-discord-green text-white mx-auto flex items-center justify-center font-bold text-xs shadow-lg shadow-discord-green/20">1</div>
+                                <p className="text-[10px] font-black text-white">تقديم الطلب</p>
                               </div>
 
-                              {/* Items in order */}
-                              <div className="space-y-2 text-xs text-gray-300">
-                                {order.items.map((item, idx) => (
-                                  <div key={idx} className="flex justify-between items-center bg-[#1e1f22] p-3 rounded-xl border border-white/5">
-                                    <div className="space-y-1">
-                                      <p className="font-bold text-white">{item.product.nameAr}</p>
-                                      {item.selectedOption && (
-                                        <p className="text-[10px] text-discord-purple font-medium font-sans">{item.selectedOption}</p>
-                                      )}
-                                    </div>
-                                    <span className="font-bold text-discord-purple bg-discord-purple/10 px-2.5 py-0.5 rounded-full text-[10px] font-sans">الكمية: {item.quantity}</span>
+                              <div className="space-y-2">
+                                <div className={`w-8 h-8 rounded-full mx-auto flex items-center justify-center font-bold text-xs ${
+                                  targetOrder.status !== 'pending' ? 'bg-discord-green text-white shadow-lg' : 'bg-discord-yellow text-discord-black animate-pulse font-black'
+                                }`}>2</div>
+                                <p className="text-[10px] font-black text-white">مراجعة الدفع</p>
+                              </div>
+
+                              <div className="space-y-2">
+                                <div className={`w-8 h-8 rounded-full mx-auto flex items-center justify-center font-bold text-xs transition-all ${
+                                  targetOrder.status === 'completed' 
+                                    ? 'bg-discord-green text-white shadow-lg' 
+                                    : targetOrder.status === 'processing'
+                                    ? 'bg-blue-500 text-white animate-pulse shadow-lg shadow-blue-500/20'
+                                    : 'bg-discord-black border border-white/10 text-gray-500'
+                                }`}>3</div>
+                                <p className="text-[10px] font-black text-white">تفعيل الخدمة</p>
+                              </div>
+
+                              <div className="space-y-2">
+                                <div className={`w-8 h-8 rounded-full mx-auto flex items-center justify-center font-bold text-xs ${
+                                  targetOrder.status === 'completed' 
+                                    ? 'bg-discord-green text-white shadow-lg' 
+                                    : targetOrder.status === 'failed'
+                                    ? 'bg-red-500 text-white'
+                                    : 'bg-discord-black border border-white/10 text-gray-500'
+                                }`}>4</div>
+                                <p className="text-[10px] font-black text-white">اكتمال وتسليم</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Order Notifications & Alerts */}
+                          <div className="space-y-3 bg-[#1e1f22] p-4 rounded-2xl border border-white/5">
+                            <h4 className="font-extrabold text-xs text-white flex items-center gap-1.5 border-b border-white/5 pb-2">
+                              <Bell className="w-4 h-4 text-discord-fuchsia animate-bounce shrink-0" />
+                              <span>إشعارات وتنبيهات الإدارة الفورية لطلبك 📣</span>
+                            </h4>
+                            {targetOrder.alerts && targetOrder.alerts.length > 0 ? (
+                              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                {targetOrder.alerts.map((alert, idx) => (
+                                  <div key={idx} className="p-3 rounded-xl bg-discord-black border border-discord-purple/20 space-y-1">
+                                    <p className="text-xs font-bold text-white leading-relaxed">{alert.message}</p>
+                                    <span className="text-[9px] text-gray-500 font-mono block text-left">{alert.timestamp}</span>
                                   </div>
                                 ))}
                               </div>
+                            ) : (
+                              <p className="text-[11px] text-gray-400 py-2">
+                                {targetOrder.status === 'pending'
+                                  ? 'طلبك الآن في مرحلة المراجعة والتحقق، سنقوم بإرسال إشعارات وتحديثات فورية لك هنا بمجرد مراجعته! ⏳'
+                                  : 'طلبك قيد التفعيل حالياً، وسنقوم بإعلامك بالتفاصيل فوراً.'}
+                              </p>
+                            )}
+                          </div>
 
-                              <div className="flex items-center justify-between text-xs pt-2">
-                                <span className="text-gray-400">طريقة الدفع: <span className="font-bold text-white font-sans">{
-                                  order.paymentMethod === 'apple_pay' ? 'Apple Pay' :
-                                  order.paymentMethod === 'stc_pay' ? 'STC Pay' :
-                                  order.paymentMethod === 'credit_card' ? 'بطاقة مدى/ائتمان' : 'تحويل بنكي'
-                                }</span></span>
-                                <span className="text-discord-green font-black text-sm font-sans">{order.total} ريال سعودي</span>
-                              </div>
+                          {/* Order Details summary */}
+                          <div className="space-y-3 bg-discord-black/50 p-4 rounded-2xl border border-white/5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-400">رقم التعريفي الفريد:</span>
+                              <span className="font-mono font-bold text-white">{targetOrder.id}</span>
                             </div>
-                          ))}
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-400">تاريخ ووقت تقديم الطلب:</span>
+                              <span className="font-mono text-gray-300">{targetOrder.date}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-400">العميل صاحب الطلب:</span>
+                              <span className="font-bold text-discord-purple">{targetOrder.customerName} (@{targetOrder.discordUsername})</span>
+                            </div>
+
+                            {/* Products bought */}
+                            <div className="space-y-1.5 pt-2 border-t border-white/5">
+                              {targetOrder.items.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-center text-xs bg-discord-black p-2 rounded-lg border border-white/5">
+                                  <span>{item.product.nameAr}</span>
+                                  <span className="font-sans font-bold text-discord-purple bg-discord-purple/10 px-2 py-0.5 rounded">x{item.quantity}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="flex justify-between items-center text-xs pt-2 border-t border-white/5">
+                              <span className="text-gray-400">إجمالي السداد:</span>
+                              <span className="font-black text-discord-green text-sm">{targetOrder.total} ريال سعودي</span>
+                            </div>
+                          </div>
+
+                          {/* Action button to print receipt */}
+                          <button
+                            onClick={() => setViewingReceiptOrder(targetOrder)}
+                            className="w-full py-3.5 bg-discord-purple hover:bg-[#4752c4] text-white text-xs font-black rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 shadow-lg glow-purple"
+                          >
+                            <span>عرض وطباعة إيصال السداد وفاتورة الطلب المعتمدة 🧾</span>
+                          </button>
                         </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  /* General lookup input */
+                  <div className="space-y-6">
+                    <div className="p-6 rounded-3xl bg-discord-dark border border-white/5 space-y-4 shadow-xl">
+                      <h3 className="font-bold text-sm text-white">ابحث عن طلباتك بالمتجر:</h3>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input
+                          type="text"
+                          placeholder="أدخل بريدك الإلكتروني، حساب ديسكورد، أو رقم الطلب (DOO-...)"
+                          value={myOrdersQuery}
+                          onChange={(e) => setMyOrdersQuery(e.target.value)}
+                          className="flex-grow bg-discord-black border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-gray-500 outline-none focus:border-discord-purple text-right font-medium"
+                        />
                       </div>
-                    );
-                  })()}
-                </div>
+                      <p className="text-[10px] text-gray-500">تلميح: سيتم فلترة وعرض كافة طلباتك تلقائياً وبشكل فوري بمجرد كتابة بريدك أو يوزرك.</p>
+                    </div>
+
+                    {/* Search Results Display */}
+                    <div className="space-y-4">
+                      {(() => {
+                        const query = myOrdersQuery.trim().toLowerCase();
+
+                        let filtered = orders;
+                        let showInfoMsg = false;
+
+                        if (query) {
+                          filtered = orders.filter(o => 
+                            o.id.toLowerCase().includes(query) ||
+                            (o.email || '').toLowerCase().includes(query) ||
+                            (o.discordUsername || '').toLowerCase().includes(query) ||
+                            (o.customerName || '').toLowerCase().includes(query)
+                          );
+                        } else {
+                          // Try to autoload from current logged-in user
+                          const savedUserStr = localStorage.getItem('doo_current_user');
+                          if (savedUserStr) {
+                            const user = JSON.parse(savedUserStr);
+                            const userEmail = (user.email || '').toLowerCase();
+                            const userDiscord = (user.discordId || '').toLowerCase();
+                            const userName = (user.username || '').toLowerCase();
+                            filtered = orders.filter(o => 
+                              (o.email && o.email.toLowerCase() === userEmail) ||
+                              (o.discordUsername && o.discordUsername.toLowerCase() === userDiscord) ||
+                              (o.customerName && o.customerName.toLowerCase() === userName)
+                            );
+                            showInfoMsg = true;
+                          } else {
+                            filtered = [];
+                          }
+                        }
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="text-center py-12 bg-discord-dark/20 border border-white/5 rounded-2xl space-y-3">
+                              <ShoppingCart className="w-10 h-10 text-gray-600 mx-auto animate-pulse" />
+                              <h4 className="font-bold text-gray-400 text-sm">لم نجد أي طلبات مطابقة!</h4>
+                              <p className="text-[11px] text-gray-500 max-w-xs mx-auto leading-relaxed">
+                                {query ? 'تأكد من إدخال بريدك الإلكتروني أو حساب ديسكورد بشكل صحيح كما كتبته في نموذج الدفع.' : 'اكتب بريدك أو حساب ديسكورد بالبحث في الأعلى للاستعلام الفوري.'}
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-4">
+                            {showInfoMsg && (
+                              <div className="p-3 bg-discord-purple/10 border border-discord-purple/20 text-discord-purple rounded-xl text-xs font-semibold text-center">
+                                👤 تم تحميل الطلبات المرتبطة بحسابك الحالي تلقائياً.
+                              </div>
+                            )}
+                            <h3 className="font-extrabold text-sm text-white">الطلبات التي تم العثور عليها ({filtered.length}):</h3>
+                            <div className="space-y-4">
+                              {filtered.map((order) => (
+                                <div 
+                                  key={order.id} 
+                                  className="bg-discord-dark border border-white/5 hover:border-white/10 p-5 rounded-2xl text-right space-y-4 transition-all"
+                                >
+                                  <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-3">
+                                    <div className="space-y-1">
+                                      <span className="text-xs font-black text-white font-mono">{order.id}</span>
+                                      <span className="text-[10px] text-gray-500 block">{order.date}</span>
+                                    </div>
+                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
+                                      order.status === 'completed' 
+                                        ? 'bg-discord-green/10 text-discord-green border border-discord-green/20' 
+                                        : order.status === 'pending'
+                                          ? 'bg-discord-yellow/10 text-discord-yellow border border-discord-yellow/20'
+                                          : order.status === 'processing'
+                                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                    }`}>
+                                      {order.status === 'completed' && 'تم التفعيل والتسليم بنجاح ✅'}
+                                      {order.status === 'pending' && 'قيد الانتظار للتحقق والمراجعة ⏳'}
+                                      {order.status === 'processing' && 'جاري العمل والتنفيذ حالياً ⚙️'}
+                                      {order.status === 'failed' && 'مرفوض أو ملغي ❌'}
+                                    </span>
+                                  </div>
+
+                                  {/* Items in order */}
+                                  <div className="space-y-2 text-xs text-gray-300">
+                                    {order.items.map((item, idx) => (
+                                      <div key={idx} className="flex justify-between items-center bg-[#1e1f22] p-3 rounded-xl border border-white/5">
+                                        <div className="space-y-1">
+                                          <p className="font-bold text-white">{item.product.nameAr}</p>
+                                          {item.selectedOption && (
+                                            <p className="text-[10px] text-discord-purple font-medium font-sans">{item.selectedOption}</p>
+                                          )}
+                                        </div>
+                                        <span className="font-bold text-discord-purple bg-discord-purple/10 px-2.5 py-0.5 rounded-full text-[10px] font-sans">الكمية: {item.quantity}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="flex items-center justify-between text-xs pt-2">
+                                    <span className="text-gray-400">طريقة الدفع: <span className="font-bold text-white font-sans">{
+                                      order.paymentMethod === 'apple_pay' ? 'Apple Pay' :
+                                      order.paymentMethod === 'stc_pay' ? 'STC Pay' :
+                                      order.paymentMethod === 'credit_card' ? 'بطاقة مدى/ائتمان' : 'تحويل بنكي'
+                                    }</span></span>
+                                    <div className="flex items-center gap-3">
+                                      <button
+                                        onClick={() => setViewingReceiptOrder(order)}
+                                        className="px-3 py-1 bg-discord-purple/20 hover:bg-discord-purple text-discord-purple hover:text-white rounded text-[10px] font-black cursor-pointer transition-all"
+                                      >
+                                        فاتورة 🧾
+                                      </button>
+                                      <span className="text-discord-green font-black text-sm font-sans">{order.total} ريال سعودي</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -1491,6 +1740,13 @@ useEffect(() => {
           </div>
         )}
       </AnimatePresence>
+
+      {viewingReceiptOrder && (
+        <OrderReceipt
+          order={viewingReceiptOrder}
+          onClose={() => setViewingReceiptOrder(null)}
+        />
+      )}
 
     </div>
   );

@@ -3,6 +3,7 @@ import { ShoppingCart, Trash2, ShieldCheck, Check, CreditCard, Landmark, Phone, 
 import { motion, AnimatePresence } from 'motion/react';
 import { CartItem, Product, Order } from '../types';
 import { PRODUCTS } from '../data';
+import { saveOrder, uploadProductImage } from '../lib/supabase';
 
 interface CartProps {
   cartItems: CartItem[];
@@ -30,6 +31,7 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
   const [cardCvv, setCardCvv] = useState('');
   const [stcNumber, setStcNumber] = useState('');
   const [receiptName, setReceiptName] = useState<string | null>(null);
+  const [receiptDataUrl, setReceiptDataUrl] = useState<string | null>(null);
   const [referenceNumber, setReferenceNumber] = useState('');
 
   // Success States
@@ -49,10 +51,39 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
     setPaymentStep('checkout');
   };
 
-  const handleUploadReceiptSimulated = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+
+  const handleUploadReceiptSimulated = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setReceiptName(e.target.files[0].name);
-      addToast('تم تحميل إيصال التحويل البنكي بنجاح! 📄');
+      const file = e.target.files[0];
+      setReceiptName(file.name);
+      setIsUploadingReceipt(true);
+      
+      try {
+        const { isSupabaseConfigured } = await import('../lib/supabase');
+        if (isSupabaseConfigured) {
+          addToast('⏳ جاري رفع صورة الإيصال تلقائياً لضمان ثباتها على سيرفراتنا...');
+          const publicUrl = await uploadProductImage(file);
+          setReceiptDataUrl(publicUrl);
+          addToast('✅ تم رفع وتخزين إيصال التحويل بنجاح! 📄');
+          setIsUploadingReceipt(false);
+          return;
+        }
+      } catch (err: any) {
+        console.warn('Failed to upload receipt to Supabase storage, using base64 fallback:', err);
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setReceiptDataUrl(reader.result as string);
+        addToast('تم تحميل إيصال التحويل البنكي محلياً بنجاح! 📄');
+        setIsUploadingReceipt(false);
+      };
+      reader.onerror = () => {
+        addToast('❌ فشل قراءة ملف الإيصال.');
+        setIsUploadingReceipt(false);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -61,7 +92,7 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
     setPaymentStep('processing');
 
     // Simulate 3 seconds secure processing
-    setTimeout(() => {
+    setTimeout(async () => {
       // Create Order as Pending for Admin Approval
       const newOrder: Order = {
         id: `DOO-${Math.floor(100000 + Math.random() * 900000)}`,
@@ -72,18 +103,18 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
         total,
         paymentMethod,
         paymentDetails: {
-          receiptUrl: receiptName || undefined,
+          receiptUrl: receiptDataUrl || undefined,
           referenceNumber: referenceNumber || undefined,
         },
         status: 'pending', // Set to pending to require manual approval
         date: new Date().toISOString().split('T')[0],
-        trackingCode: `TRK-${Math.floor(10000000 + Math.random() * 90000000)}`
+        timestamp: new Date().toLocaleString('ar-EG', { hour12: true }), // Automatic date & time timestamp
+        trackingCode: `TRK-${Math.floor(10000000 + Math.random() * 90000000)}`,
+        alerts: []
       };
 
-      // Save Order to history
-      const savedOrders = localStorage.getItem('doo_store_orders');
-      const currentOrders = savedOrders ? JSON.parse(savedOrders) : [];
-      localStorage.setItem('doo_store_orders', JSON.stringify([newOrder, ...currentOrders]));
+      // Save Order to history (both Supabase & local storage fallback)
+      await saveOrder(newOrder);
 
       // Generate simulation Activation Codes (e.g. Nitro code link or Bot invite URL)
       const codes = cartItems.map((item) => {
@@ -511,7 +542,7 @@ export default function Cart({ cartItems, onUpdateQuantity, onRemoveItem, onClea
                                 className="w-full bg-discord-dark border border-white/10 hover:border-discord-purple rounded-xl py-3 px-4 flex items-center justify-center gap-2 cursor-pointer text-gray-300 hover:text-white transition-all text-xs"
                               >
                                 <Camera className="w-4 h-4 text-discord-fuchsia shrink-0" />
-                                <span>{receiptName ? receiptName : 'اضغط لتحميل الإيصال'}</span>
+                                <span>{isUploadingReceipt ? '⏳ جاري رفع وقراءة الإيصال...' : receiptName ? receiptName : 'اضغط لتحميل الإيصال'}</span>
                               </label>
                             </div>
                           </div>

@@ -2,10 +2,18 @@ import React, { useState } from 'react';
 import { Product, CartItem, Order } from '../types';
 import { ShieldCheck, Video, HelpCircle, AlertTriangle, Sparkles, ShoppingCart, Send, ArrowLeft, Flame, Eye, Share2, Star, Check, Camera } from 'lucide-react';
 import { motion } from 'motion/react';
+import { saveOrder, uploadProductImage } from '../lib/supabase';
 
 interface ProductDetailsProps {
   product: Product;
-  onAddToCart: (prod: Product, quantity: number, option?: string, serverLink?: string, supporterName?: string) => void;
+  onAddToCart: (
+    prod: Product,
+    quantity: number,
+    option?: string,
+    serverLink?: string,
+    supporterName?: string,
+    customImage?: string
+  ) => void;
   onNavigate: (view: string) => void;
   addToast: (msg: string) => void;
 }
@@ -45,6 +53,8 @@ export default function ProductDetails({ product, onAddToCart, onNavigate, addTo
   const [customerName, setCustomerName] = useState('');
   const [email, setEmail] = useState('');
   const [uploadedImageName, setUploadedImageName] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isRequestSubmitted, setIsRequestSubmitted] = useState(false);
 
   const currentOption = product.category === 'effects'
@@ -149,7 +159,8 @@ export default function ProductDetails({ product, onAddToCart, onNavigate, addTo
       quantity,
       finalOptionText,
       finalServerLink,
-      finalSupporterName
+      finalSupporterName,
+      uploadedImageUrl || undefined
     );
     addToast(`🛒 تم إضافة ${product.nameAr} إلى السلة بنجاح!`);
     onNavigate('cart');
@@ -201,7 +212,8 @@ export default function ProductDetails({ product, onAddToCart, onNavigate, addTo
           product: { ...product, price: 0 }, // price will be set by admin later
           quantity: 1,
           serverLink: discordTag,
-          selectedOption: effectDesc // "اكتب ماتريد"
+          selectedOption: effectDesc, // "اكتب ماتريد"
+          customImage: uploadedImageUrl || undefined
         }
       ],
       total: 0, // Admin will set this
@@ -212,10 +224,8 @@ export default function ProductDetails({ product, onAddToCart, onNavigate, addTo
       trackingCode: `TRK-${Math.floor(10000000 + Math.random() * 90000000)}`
     };
 
-    // Save Order to history
-    const savedOrders = localStorage.getItem('doo_store_orders');
-    const currentOrders = savedOrders ? JSON.parse(savedOrders) : [];
-    localStorage.setItem('doo_store_orders', JSON.stringify([newOrder, ...currentOrders]));
+    // Save Order to history (both Supabase & local storage fallback)
+    saveOrder(newOrder);
 
     // Emit event so live notification is triggered!
     window.dispatchEvent(new CustomEvent('new_order_placed', { detail: newOrder }));
@@ -463,17 +473,29 @@ export default function ProductDetails({ product, onAddToCart, onNavigate, addTo
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       if (e.target.files && e.target.files[0]) {
-                        setUploadedImageName(e.target.files[0].name);
-                        addToast('📸 تم تحديد صورة الطلب بنجاح!');
+                        const file = e.target.files[0];
+                        setUploadedImageName(file.name);
+                        setIsUploadingImage(true);
+                        addToast('⏳ جاري رفع صورة الطلب لضمان حفظها...');
+                        try {
+                          const url = await uploadProductImage(file);
+                          setUploadedImageUrl(url);
+                          addToast('✅ تم رفع وحفظ صورة الطلب بنجاح! 📸');
+                        } catch (err) {
+                          addToast('❌ فشل رفع الصورة، يرجى المحاولة لاحقاً');
+                          console.error(err);
+                        } finally {
+                          setIsUploadingImage(false);
+                        }
                       }
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer"
                   />
                   <Camera className="w-6 h-6 text-gray-500 group-hover:text-discord-purple transition-colors mb-1.5" />
                   <span className="text-[11px] text-gray-400 font-medium text-center">
-                    {uploadedImageName ? `✓ تم الاختيار: ${uploadedImageName}` : 'اضغط لتحديد صورة أو اسحبها هنا لتصميم تأثيرك المخصص'}
+                    {isUploadingImage ? '⏳ جاري رفع وحفظ الصورة...' : uploadedImageName ? `✓ تم الاختيار: ${uploadedImageName}` : 'اضغط لتحديد صورة أو اسحبها هنا لتصميم تأثيرك المخصص'}
                   </span>
                 </div>
               </div>
@@ -660,18 +682,28 @@ export default function ProductDetails({ product, onAddToCart, onNavigate, addTo
               {product.category === 'creations_custom' ? (
                 <button
                   onClick={handleDirectCreationOrder}
-                  className="w-full py-4 bg-discord-purple hover:bg-[#4752c4] text-white text-xs font-black rounded-xl cursor-pointer shadow-lg transition-all glow-purple transform hover:scale-103 active:scale-97 text-center flex items-center justify-center gap-2"
+                  disabled={isUploadingImage}
+                  className={`w-full py-4 text-white text-xs font-black rounded-xl cursor-pointer shadow-lg transition-all text-center flex items-center justify-center gap-2 ${
+                    isUploadingImage 
+                      ? 'bg-discord-purple/45 cursor-not-allowed opacity-75' 
+                      : 'bg-discord-purple hover:bg-[#4752c4] glow-purple transform hover:scale-103 active:scale-97'
+                  }`}
                 >
                   <Send className="w-4.5 h-4.5" />
-                  <span>إتمام الطلب</span>
+                  <span>{isUploadingImage ? 'جاري رفع الملف...' : 'إتمام الطلب'}</span>
                 </button>
               ) : (
                 <button
                   onClick={handleAddToCart}
-                  className="w-full py-4 bg-discord-purple hover:bg-[#4752c4] text-white text-xs font-black rounded-xl cursor-pointer shadow-lg transition-all glow-purple transform hover:scale-103 active:scale-97 text-center flex items-center justify-center gap-2"
+                  disabled={isUploadingImage}
+                  className={`w-full py-4 text-white text-xs font-black rounded-xl cursor-pointer shadow-lg transition-all text-center flex items-center justify-center gap-2 ${
+                    isUploadingImage 
+                      ? 'bg-discord-purple/45 cursor-not-allowed opacity-75' 
+                      : 'bg-discord-purple hover:bg-[#4752c4] glow-purple transform hover:scale-103 active:scale-97'
+                  }`}
                 >
                   <ShoppingCart className="w-4.5 h-4.5" />
-                  <span>إضافة إلى السلة وإكمال الشراء الفوري</span>
+                  <span>{isUploadingImage ? 'جاري رفع الصورة...' : 'إضافة إلى السلة وإكمال الشراء الفوري'}</span>
                 </button>
               )}
             </div>

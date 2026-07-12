@@ -23,6 +23,7 @@ import {
   FileText
 } from 'lucide-react';
 import { Order } from '../types';
+import { getOrders } from '../lib/supabase';
 
 interface UserProfileProps {
   addToast: (msg: string) => void;
@@ -86,11 +87,10 @@ export default function UserProfile({ addToast, onNavigate }: UserProfileProps) 
     }
   }, []);
 
-  const loadUserData = (username: string, email: string, discordId: string) => {
-    // Load Orders linked to this user (either by email or discordUsername)
-    const savedOrders = localStorage.getItem('doo_store_orders');
-    if (savedOrders) {
-      const allOrders = JSON.parse(savedOrders) as Order[];
+  const loadUserData = async (username: string, email: string, discordId: string) => {
+    // Load Orders linked to this user (either by email or discordUsername) from Supabase
+    try {
+      const allOrders = await getOrders();
       const filtered = allOrders.filter(
         (o) => {
           const orderEmail = (o.email || '').toLowerCase();
@@ -107,6 +107,8 @@ export default function UserProfile({ addToast, onNavigate }: UserProfileProps) 
         }
       );
       setUserOrders(filtered);
+    } catch (err) {
+      console.error('Failed to load user orders from Supabase:', err);
     }
 
     // Load custom creations requests

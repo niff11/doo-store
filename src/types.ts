@@ -33,6 +33,13 @@ export interface CartItem {
   selectedOption?: string; // e.g. "3 months", "1 month"
   serverLink?: string;
   supporterName?: string;
+  customImage?: string;
+}
+
+export interface OrderAlert {
+  message: string;
+  timestamp: string;
+  isRead: boolean;
 }
 
 export interface Order {
@@ -51,7 +58,9 @@ export interface Order {
   };
   status: 'pending' | 'processing' | 'completed' | 'failed';
   date: string;
+  timestamp?: string; // Automatic exact date and time
   trackingCode?: string;
+  alerts?: OrderAlert[]; // Automated alerts for status updates
 }
 
 export interface FAQ {
